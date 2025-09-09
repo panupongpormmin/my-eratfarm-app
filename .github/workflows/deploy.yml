@@ -1,25 +1,42 @@
-name: Set up Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '18'
+# ชื่อของ Workflow
+name: Deploy to Firebase Hosting
 
-name: Create firebase-config.js
-    run: |
-      echo "export const firebaseConfig = {" >> firebase-config.js
-      echo "    apiKey: \"${{ secrets.FIREBASE_API_KEY }}\"," >> firebase-config.js
-      echo "    authDomain: \"${{ secrets.FIREBASE_AUTH_DOMAIN }}\"," >> firebase-config.js
-      echo "    projectId: \"${{ secrets.FIREBASE_PROJECT_ID }}\"," >> firebase-config.js
-      echo "    storageBucket: \"${{ secrets.FIREBASE_STORAGE_BUCKET }}\"," >> firebase-config.js
-      echo "    messagingSenderId: \"${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}\"," >> firebase-config.js
-      echo "    appId: \"${{ secrets.FIREBASE_APP_ID }}\"," >> firebase-config.js
-      echo "    measurementId: \"${{ secrets.FIREBASE_MEASUREMENT_ID }}\"" >> firebase-config.js
-      echo "};" >> firebase-config.js
-name: Setup Pages
-    uses: actions/configure-pages@v5
+# กำหนดให้ Workflow ทำงานเมื่อมีการ push ไปที่ branch 'main'
+on:
+  push:
+    branches:
+      - main
 
-name: Upload artifact
-    uses: actions/upload-pages-artifact@v3
-    with:
+# กำหนดงานที่จะทำ
+jobs:
+  build_and_deploy:
+    # เลือกระบบปฏิบัติการที่จะใช้รัน
+    runs-on: ubuntu-latest
+    
+    # ขั้นตอนการทำงาน
+    steps:
+      # 1. Checkout โค้ดจาก Repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      path: '.'
-
+      # 2. สร้างไฟล์ firebase-config.js จาก Secrets
+      - name: Create firebase-config.js
+        run: |
+          echo "export const firebaseConfig = {" >> js/firebase-config.js
+          echo "  apiKey: \"${{ secrets.FIREBASE_API_KEY }}\"," >> js/firebase-config.js
+          echo "  authDomain: \"${{ secrets.FIREBASE_AUTH_DOMAIN }}\"," >> js/firebase-config.js
+          echo "  projectId: \"${{ secrets.FIREBASE_PROJECT_ID }}\"," >> js/firebase-config.js
+          echo "  storageBucket: \"${{ secrets.FIREBASE_STORAGE_BUCKET }}\"," >> js/firebase-config.js
+          echo "  messagingSenderId: \"${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}\"," >> js/firebase-config.js
+          echo "  appId: \"${{ secrets.FIREBASE_APP_ID }}\"," >> js/firebase-config.js
+          echo "  measurementId: \"${{ secrets.FIREBASE_MEASUREMENT_ID }}\"" >> js/firebase-config.js
+          echo "};" >> js/firebase-config.js
+      
+      # 3. Deploy ไปยัง Firebase Hosting
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ERATFARM }}'
+          channelId: live
+          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
