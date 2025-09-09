@@ -3,7 +3,7 @@
 // deployment process (e.g., GitHub Actions Secrets).
 
 // Replace the placeholder values with your actual Firebase project settings.
-export const firebaseConfig = {
+const firebaseConfig = {
     apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
     authDomain: "eratfarm-bd035.firebaseapp.com",
     projectId: "eratfarm-bd035",
@@ -12,3 +12,4 @@ export const firebaseConfig = {
     appId: "1:462976136580:web:a1ef8ee2b32f1cc4bf19d1",
     measurementId: "G-QHBHS05KRL"
 };
+
