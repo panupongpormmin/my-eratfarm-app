@@ -12,13 +12,10 @@
         import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // ตั้งค่าการแสดงผล log ใน console เพื่อช่วยในการดีบัก
         setLogLevel('debug');
 
-        // ตัวแปรส่วนกลางที่ได้รับมาจากสภาพแวดล้อม Canvas
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // ข้อมูลการตั้งค่า Firebase ที่ได้รับจากผู้ใช้
         const firebaseConfig = {
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
             authDomain: "eratfarm-bd035.firebaseapp.com",
@@ -78,7 +75,7 @@
                             godModeEnabled = localStorage.getItem('godModeEnabled') === 'true';
                             await checkUserRole(user);
                             isAuthReady = true;
-                            listenToRats(); // This will trigger the first render
+                            listenToRats();
                             listenToOrders();
                             if (['admin', 'fattening_staff'].includes(currentUserRole)) {
                                 listenToMessages();
@@ -126,7 +123,6 @@
                     currentUserRole = 'user';
                 }
             }
-            // Set default page based on role
             if (['admin', 'ceo'].includes(currentUserRole)) {
                 currentPage = 'dashboard';
             } else {
@@ -158,7 +154,7 @@
             const ratsCollectionRef = collection(db, `artifacts/${appId}/public/data/rats`);
             onSnapshot(ratsCollectionRef, (snapshot) => {
                 allRats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderApp();
+                updateUIOnDataChange('rats');
             }, (error) => console.error("Error listening to rats:", error));
         }
         
@@ -167,9 +163,7 @@
             const ordersCollectionRef = collection(db, `artifacts/${appId}/public/data/orders`);
             onSnapshot(ordersCollectionRef, (snapshot) => {
                 allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (['dashboard', 'order', 'manage'].includes(currentPage)) {
-                    renderApp();
-                }
+                updateUIOnDataChange('orders');
             }, (error) => console.error("Error listening to orders:", error));
         }
         
@@ -178,7 +172,7 @@
             const usersCollectionRef = collection(db, `artifacts/${appId}/public/data/user_roles`);
             onSnapshot(usersCollectionRef, (snapshot) => {
                 allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if(currentPage === 'admin') renderApp();
+                updateUIOnDataChange('users');
             });
         }
 
@@ -186,8 +180,24 @@
             const messagesRef = collection(db, `artifacts/${appId}/public/data/messages`);
             onSnapshot(messagesRef, (snapshot) => {
                 allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (currentPage === 'manage') renderApp();
+                updateUIOnDataChange('messages');
             });
+        }
+        
+        function updateUIOnDataChange(dataType) {
+            if (currentPage === 'dashboard' && ['admin', 'ceo'].includes(currentUserRole)) {
+                renderDashboardPage();
+            } else if (currentPage === 'main') {
+                renderMainPage();
+            } else if (currentPage === 'manage') {
+                renderManagePage();
+            } else if (currentPage === 'order') {
+                renderOrderPage();
+            } else if (currentPage === 'admin' && currentUserRole === 'admin') {
+                renderAdminPage();
+            } else {
+                renderApp();
+            }
         }
         
         async function updateUserRole(targetUserId, newRole) {
@@ -214,8 +224,6 @@
             }
         }
 
-        // --- START: BUG FIX (STABILITY) ---
-        // ปรับปรุง Event Listener และเพิ่มฟังก์ชันอัปเดต UI เฉพาะส่วน
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -268,20 +276,16 @@
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
-                    // อ่านค่าจาก DOM ทั้งหมดเมื่อมีการเปลี่ยนแปลง
                     currentRack = document.getElementById('rat-rack').value;
                     currentShelf = document.getElementById('rat-shelf').value;
                     currentSide = document.getElementById('rat-side').value;
-                    // เรียก handleFilterChange ที่จะอัปเดตเฉพาะส่วนของ Summary
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
-                    currentWeight = ''; // Reset weight when size changes
-                    // วาดฟอร์มใหม่เพื่อแสดงตัวเลือกน้ำหนัก แต่ไม่วาดทั้งแอป
+                    currentWeight = '';
                     updateRatFormUI(); 
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
-                    // ไม่ต้องทำอะไรที่นี่ เพราะค่าถูกบันทึกแล้ว
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
                 }
@@ -457,7 +461,14 @@
                 return;
             }
             const weight = parseFloat(currentWeight);
-            const crateRats = allRats.filter(rat => rat.rack === currentRack && rat.shelf == currentShelf && rat.side === currentSide);
+            const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                where("rack", "==", currentRack),
+                where("shelf", "==", currentShelf),
+                where("side", "==", currentSide));
+
+            const querySnapshot = await getDocs(q);
+            const crateRats = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             if (crateRats.length === 0) return alertMessage("ไม่พบหนูในกระบะที่เลือก");
             
             const candidates = crateRats.map(rat => {
@@ -558,8 +569,15 @@
                 }
                 return;
             }
+            
+            const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                where("rack", "==", currentRack),
+                where("shelf", "==", currentShelf),
+                where("side", "==", currentSide));
 
-            const crateRats = allRats.filter(rat => rat.rack === currentRack && rat.shelf == currentShelf && rat.side === currentSide);
+            const querySnapshot = await getDocs(q);
+            const crateRats = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             if (crateRats.length === 0) return alertMessage("ไม่พบหนูในกระบะที่เลือก (ปิด GOD Mode อยู่)");
 
             const candidates = crateRats.map(rat => {
@@ -647,7 +665,6 @@
                 return;
             }
 
-            // Destroy previous charts to prevent memory leaks
             Object.values(chartInstances).forEach(chart => chart.destroy());
             chartInstances = {};
 
@@ -682,7 +699,7 @@
             else if (currentPage === 'manage') renderManagePage();
             else if (currentPage === 'order') renderOrderPage();
             else if (currentPage === 'admin' && currentUserRole === 'admin') renderAdminPage();
-            else renderMainPage(); // Fallback to main page
+            else renderMainPage();
         }
         
         function renderDashboardPage() {
@@ -1170,8 +1187,6 @@
             }
         }
         
-        // --- START: BUG FIX ---
-        // ฟังก์ชันนี้จะอัปเดตเฉพาะส่วนของ Summary เท่านั้น เพื่อไม่ให้เกิด Loop
         function handleFilterChange() {
             renderRatSummary();
         }
@@ -1198,8 +1213,7 @@
             renderManageOrderSummary();
             renderRatSummary();
         }
-        // --- END: BUG FIX ---
-
+        
         function renderRatSummary() {
             const summaryContainer = document.getElementById('rat-summary');
             if (!summaryContainer) return;
