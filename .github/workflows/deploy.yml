@@ -1,25 +1,22 @@
-# ชื่อของ Workflow
-name: Deploy to Firebase Hosting
+name: Deploy to GitHub Pages
 
-# กำหนดให้ Workflow ทำงานเมื่อมีการ push ไปที่ branch 'main'
 on:
   push:
     branches:
       - main
 
-# กำหนดงานที่จะทำ
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build_and_deploy:
-    # เลือกระบบปฏิบัติการที่จะใช้รัน
     runs-on: ubuntu-latest
-    
-    # ขั้นตอนการทำงาน
     steps:
-      # 1. Checkout โค้ดจาก Repository
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # 2. สร้างไฟล์ firebase-config.js จาก Secrets
+      
       - name: Create firebase-config.js
         run: |
           echo "export const firebaseConfig = {" >> js/firebase-config.js
@@ -31,12 +28,15 @@ jobs:
           echo "  appId: \"${{ secrets.FIREBASE_APP_ID }}\"," >> js/firebase-config.js
           echo "  measurementId: \"${{ secrets.FIREBASE_MEASUREMENT_ID }}\"" >> js/firebase-config.js
           echo "};" >> js/firebase-config.js
-      
-      # 3. Deploy ไปยัง Firebase Hosting
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ERATFARM }}'
-          channelId: live
-          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
