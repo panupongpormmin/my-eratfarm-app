@@ -212,8 +212,6 @@
             }
         }
 
-        // --- START: LOCATION UI CHANGE 2 ---
-        // ปรับปรุง Event Listener ทั้งหมด
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -275,8 +273,12 @@
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (target.id === 'rat-rack') {
+                    // --- START: BUG FIX (INFINITE LOOP) ---
+                    // เพิ่มเงื่อนไขเช็คว่าค่ามีการเปลี่ยนแปลงจริงหรือไม่ ก่อนเรียก renderApp()
+                    if (target.value === currentRack) return; 
+                    // --- END: BUG FIX (INFINITE LOOP) ---
+                    
                     currentRack = target.value;
-                    // เมื่อเลือก Rack ใหม่ ให้เคลียร์ชั้นและกระบะที่เลือกไว้
                     currentShelf = '';
                     currentSide = '';
                     handleFilterChange();
@@ -1203,27 +1205,15 @@
                 weightContainer.innerHTML = '';
             }
         }
-
-        // --- START: LOCATION UI CHANGE 3 ---
-        // ปรับปรุง handleFilterChange ให้ใช้ State แทนการอ่านจาก DOM
+        
         function handleFilterChange() {
-            // เราจะอ่านค่าจาก global state variables โดยตรง
-            let filteredRats = allRats.filter(rat => 
-                (!currentRack || rat.rack === currentRack) && 
-                (!currentShelf || rat.shelf == currentShelf) && 
-                (!currentSide || rat.side === currentSide)
-            );
-            
-            // เนื่องจากเราไม่ได้ render ทั้งหน้าจอ เราจึงต้องเรียก render ส่วนที่เกี่ยวข้องโดยตรง
-            // แต่ในโครงสร้างปัจจุบัน การเรียก renderApp() จะง่ายที่สุด
             renderApp();
         }
 
-        function renderRatSummary(rats) {
+        function renderRatSummary() {
             const summaryContainer = document.getElementById('rat-summary');
             if (!summaryContainer) return;
 
-            // กรองข้อมูลอีกครั้งตาม state ปัจจุบันก่อนแสดงผล
             const filteredRats = allRats.filter(rat => 
                 (!currentRack || rat.rack === currentRack) && 
                 (!currentShelf || rat.shelf == currentShelf) && 
@@ -1242,7 +1232,6 @@
             const sizeDetails = Object.entries(sizeCounts).map(([size, count]) => `<li class="flex justify-between items-center bg-gray-100 p-3 rounded-md"><span class="font-bold text-gray-700">ไซส์ ${size} (ตอนเพิ่ม)</span><span class="text-lg font-semibold text-indigo-600">${count} ตัว</span></li>`).join('');
             summaryContainer.innerHTML = `<div class="space-y-4"><div class="bg-indigo-500 text-white p-6 rounded-lg shadow-md text-center"><p class="text-sm font-medium">จำนวนหนูในกระบะที่เลือก</p><p class="text-4xl font-extrabold mt-1">${totalRats}</p></div><div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-lg font-medium text-gray-800 mb-2">สรุปจำนวนตามไซส์</h3><ul class="space-y-2">${sizeDetails}</ul></div></div>`;
         }
-        // --- END: LOCATION UI CHANGE 3 ---
 
         function predictRats(targetDate) {
             const predictions = {};
