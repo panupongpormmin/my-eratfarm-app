@@ -652,9 +652,7 @@
             if (!pageContent) return;
 
             const metrics = calculateDashboardMetrics();
-
-            // --- START: MODIFIED SECTION 1 ---
-            // เปลี่ยนชื่อหัวข้อของกราฟ
+            
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -699,57 +697,55 @@
                     </div>
                 </div>
             `;
-            // --- END: MODIFIED SECTION 1 ---
+            
+            // --- START: BUG FIX ---
+            // ย้ายโค้ดการสร้าง Chart ทั้งหมดมาไว้นอก setTimeout
+            // เพื่อให้กราฟถูกวาดทันทีหลังจากสร้าง HTML เสร็จ
+            const inventoryLabels = ratSizeOptions.map(s => s.size);
+            const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
 
-            // --- START: MODIFIED SECTION 3 ---
-            // สร้างกราฟเส้น 2 เส้นแทนที่ของเดิม
-            setTimeout(() => {
-                const inventoryLabels = ratSizeOptions.map(s => s.size);
-                const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
-
-                createBarChart('inventory-chart', inventoryLabels, inventoryData, 'จำนวนหนู');
-                createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
-                createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
-                
-                // สร้างกราฟ 'growth-chart' แบบ 2 เส้น
-                const growthCtx = document.getElementById('growth-chart');
-                if (growthCtx) {
-                    chartInstances['growth-chart'] = new Chart(growthCtx, {
-                        type: 'line',
-                        data: {
-                            labels: metrics.dailyActivityData.labels,
-                            datasets: [
-                                {
-                                    label: 'จำนวนหนูที่เพิ่ม',
-                                    data: metrics.dailyActivityData.added,
-                                    borderColor: 'rgba(75, 192, 192, 1)',
-                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                    fill: true,
-                                    tension: 0.4
-                                },
-                                {
-                                    label: 'จำนวนหนูที่ลดลง',
-                                    data: metrics.dailyActivityData.removed,
-                                    borderColor: 'rgba(255, 99, 132, 1)',
-                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                                    fill: true,
-                                    tension: 0.4
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            plugins: {
-                                legend: { position: 'top' }
+            createBarChart('inventory-chart', inventoryLabels, inventoryData, 'จำนวนหนู');
+            createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
+            createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
+            
+            // สร้างกราฟ 'growth-chart' แบบ 2 เส้น
+            const growthCtx = document.getElementById('growth-chart');
+            if (growthCtx) {
+                chartInstances['growth-chart'] = new Chart(growthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: metrics.dailyActivityData.labels,
+                        datasets: [
+                            {
+                                label: 'จำนวนหนูที่เพิ่ม',
+                                data: metrics.dailyActivityData.added,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: true,
+                                tension: 0.4
                             },
-                            scales: {
-                                y: { beginAtZero: true }
+                            {
+                                label: 'จำนวนหนูที่ลดลง',
+                                data: metrics.dailyActivityData.removed,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                fill: true,
+                                tension: 0.4
                             }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
                         }
-                    });
-                }
-            }, 100);
-            // --- END: MODIFIED SECTION 3 ---
+                    }
+                });
+            }
+            // --- END: BUG FIX ---
         }
 
         function calculateDashboardMetrics() {
@@ -808,9 +804,7 @@
 
             priorityItems.sort((a,b) => b.remaining - a.remaining || a.createdAt - b.createdAt);
             
-            // --- START: MODIFIED SECTION 2 ---
-            // เปลี่ยนชื่อ Growth Metrics เป็น Daily Activity Metrics
-            // และเพิ่มการคำนวณข้อมูล 'หนูที่ลดลง' (removed)
+            // --- Daily Activity Metrics ---
             const dailyActivity = {};
             const dailyLabels = [];
             for (let i = 6; i >= 0; i--) {
@@ -865,7 +859,6 @@
                     removed: Object.values(dailyActivity).map(d => d.removed)
                 }
             };
-            // --- END: MODIFIED SECTION 2 ---
         }
 
         // NEW GENERIC CHART CREATION FUNCTIONS
@@ -1230,6 +1223,3 @@
     </div>
 </body>
 </html>
-
-}
-ดูเหมือนจะมีบัคบางอย่างครับ คือถ้าผมรีหน้าเว็บ หรือว่าเปลี่ยนหน้าไปที่อื่นเเล้วกลับมาที่หน้า dashboard ใหม่ กราฟมันไม่ขึ้นครับ
