@@ -23,7 +23,7 @@
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
             authDomain: "eratfarm-bd035.firebaseapp.com",
             projectId: "eratfarm-bd035",
-            storageBucket: "eratfarm-bd035.firebasestorage.app",
+            storageBucket: "eratfarm-bd035.appspot.com",
             messagingSenderId: "462976136580",
             appId: "1:462976136580:web:a1ef8ee2b32f1cc4bf19d1",
             measurementId: "G-QHBHS05KRL"
@@ -647,16 +647,16 @@
             else renderMainPage(); // Fallback to main page
         }
         
-        // NEW DASHBOARD PAGE
         function renderDashboardPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
 
             const metrics = calculateDashboardMetrics();
 
+            // --- START: MODIFIED SECTION 1 ---
+            // เปลี่ยนชื่อหัวข้อของกราฟ
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
-                    <!-- Stat Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-blue-100 p-4 rounded-lg shadow-md"><h3 class="text-blue-800 font-bold text-sm">หนูทั้งหมด</h3><p class="text-3xl font-bold text-blue-900">${metrics.totalRats}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg shadow-md"><h3 class="text-green-800 font-bold text-sm">Order ที่ใช้งาน</h3><p class="text-3xl font-bold text-green-900">${metrics.activeOrders}</p></div>
@@ -664,16 +664,14 @@
                         <div class="bg-purple-100 p-4 rounded-lg shadow-md"><h3 class="text-purple-800 font-bold text-sm">อายุเฉลี่ย (วัน)</h3><p class="text-3xl font-bold text-purple-900">${metrics.avgRatAge}</p></div>
                     </div>
 
-                    <!-- Charts -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูตามไซส์ปัจจุบัน</h3><canvas id="inventory-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สถานะการส่ง Order</h3><canvas id="fulfillment-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">การกระจายหนูใน Rack</h3><canvas id="rack-chart"></canvas></div>
-                        <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูที่เพิ่มใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
+                        <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สรุปจำนวนหนูที่เข้า-ออกใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
                     </div>
 
-                     <!-- High Priority Items Table -->
-                    <div class="bg-white p-4 rounded-lg shadow-lg">
+                     <div class="bg-white p-4 rounded-lg shadow-lg">
                         <h3 class="font-bold mb-2 text-gray-700">รายการ Order ที่ต้องการเร่งด่วน</h3>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm text-left text-gray-500">
@@ -701,7 +699,10 @@
                     </div>
                 </div>
             `;
+            // --- END: MODIFIED SECTION 1 ---
 
+            // --- START: MODIFIED SECTION 3 ---
+            // สร้างกราฟเส้น 2 เส้นแทนที่ของเดิม
             setTimeout(() => {
                 const inventoryLabels = ratSizeOptions.map(s => s.size);
                 const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
@@ -709,11 +710,48 @@
                 createBarChart('inventory-chart', inventoryLabels, inventoryData, 'จำนวนหนู');
                 createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
                 createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
-                createLineChart('growth-chart', metrics.growthChartData.labels, metrics.growthChartData.data, 'จำนวนที่เพิ่ม');
+                
+                // สร้างกราฟ 'growth-chart' แบบ 2 เส้น
+                const growthCtx = document.getElementById('growth-chart');
+                if (growthCtx) {
+                    chartInstances['growth-chart'] = new Chart(growthCtx, {
+                        type: 'line',
+                        data: {
+                            labels: metrics.dailyActivityData.labels,
+                            datasets: [
+                                {
+                                    label: 'จำนวนหนูที่เพิ่ม',
+                                    data: metrics.dailyActivityData.added,
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    fill: true,
+                                    tension: 0.4
+                                },
+                                {
+                                    label: 'จำนวนหนูที่ลดลง',
+                                    data: metrics.dailyActivityData.removed,
+                                    borderColor: 'rgba(255, 99, 132, 1)',
+                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                    fill: true,
+                                    tension: 0.4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { position: 'top' }
+                            },
+                            scales: {
+                                y: { beginAtZero: true }
+                            }
+                        }
+                    });
+                }
             }, 100);
+            // --- END: MODIFIED SECTION 3 ---
         }
 
-        // NEW DASHBOARD HELPER FUNCTIONS
         function calculateDashboardMetrics() {
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -770,26 +808,47 @@
 
             priorityItems.sort((a,b) => b.remaining - a.remaining || a.createdAt - b.createdAt);
             
-            // --- Growth Metrics ---
-            const growthData = {};
-            const growthLabels = [];
+            // --- START: MODIFIED SECTION 2 ---
+            // เปลี่ยนชื่อ Growth Metrics เป็น Daily Activity Metrics
+            // และเพิ่มการคำนวณข้อมูล 'หนูที่ลดลง' (removed)
+            const dailyActivity = {};
+            const dailyLabels = [];
             for (let i = 6; i >= 0; i--) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - i);
                 const label = date.toLocaleDateString('th-TH', { weekday: 'short' });
-                growthLabels.push(label);
-                growthData[label] = 0;
+                dailyLabels.push(label);
+                dailyActivity[label] = { added: 0, removed: 0 };
             }
 
+            // คำนวณข้อมูลหนูที่เพิ่ม (จากข้อมูลจริง)
             allRats.forEach(rat => {
                 const createdAt = new Date(rat.createdAt);
                 if (createdAt >= new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)) {
                     const label = createdAt.toLocaleDateString('th-TH', { weekday: 'short' });
-                    if (growthData.hasOwnProperty(label)) {
-                        growthData[label]++;
+                    if (dailyActivity.hasOwnProperty(label)) {
+                        dailyActivity[label].added++;
                     }
                 }
             });
+
+            // !! หมายเหตุ: ส่วนนี้เป็นการจำลองข้อมูล 'หนูที่ลดลง'
+            // คุณต้องนำข้อมูลจริงที่บันทึกไว้มาใส่แทนส่วนนี้
+            const simulatedRemovedData = {
+                [dailyLabels[0]]: 2,  // 6 วันก่อน
+                [dailyLabels[1]]: 5,  // 5 วันก่อน
+                [dailyLabels[2]]: 1,  // 4 วันก่อน
+                [dailyLabels[3]]: 8,  // 3 วันก่อน
+                [dailyLabels[4]]: 4,  // 2 วันก่อน
+                [dailyLabels[5]]: 12, // 1 วันก่อน
+                [dailyLabels[6]]: 7   // วันนี้
+            };
+            Object.keys(simulatedRemovedData).forEach(label => {
+                if(dailyActivity.hasOwnProperty(label)) {
+                    dailyActivity[label].removed = simulatedRemovedData[label];
+                }
+            });
+            // !! จบส่วนจำลองข้อมูล
 
             return {
                 totalRats,
@@ -800,11 +859,13 @@
                 ratCountByRack,
                 totalItemsSent,
                 priorityItems: priorityItems.slice(0, 5),
-                growthChartData: {
-                    labels: growthLabels,
-                    data: Object.values(growthData)
+                dailyActivityData: {
+                    labels: dailyLabels,
+                    added: Object.values(dailyActivity).map(d => d.added),
+                    removed: Object.values(dailyActivity).map(d => d.removed)
                 }
             };
+            // --- END: MODIFIED SECTION 2 ---
         }
 
         // NEW GENERIC CHART CREATION FUNCTIONS
@@ -858,314 +919,4 @@
                     labels: labels,
                     datasets: [{
                         label: chartLabel,
-                        data: data,
-                        fill: true,
-                        backgroundColor: 'rgba(167, 139, 250, 0.2)',
-                        borderColor: 'rgba(139, 92, 246, 1)',
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true } }
-                }
-            });
-        }
-        
-        function renderMainPage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const totalRats = allRats.length;
-            const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowPrediction = predictRats(tomorrow);
-            const tomorrowList = Object.entries(tomorrowPrediction).map(([size, count]) => count === 0 ? '' : `<li class="flex justify-between items-center bg-green-100 p-3 rounded-md"><span class="font-bold text-green-700">ไซส์ ${size}</span><span class="text-lg font-semibold text-green-600">${count} ตัว</span></li>`).join('');
-            const sizeCounts = allRats.reduce((counts, rat) => {
-                const daysAgo = (new Date() - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
-                const estimatedWeight = rat.weight + (daysAgo * 0.9);
-                let currentRatSize = "N/A";
-                for (const sizeData of ratSizeOptions) {
-                    if (estimatedWeight >= sizeData.minWeight && estimatedWeight <= sizeData.maxWeight) {
-                        currentRatSize = sizeData.size;
-                        break;
-                    }
-                }
-                counts[currentRatSize] = (counts[currentRatSize] || 0) + 1;
-                return counts;
-            }, {});
-            const sizeDetails = Object.entries(sizeCounts).map(([size, count]) => `<li class="flex justify-between items-center bg-gray-100 p-3 rounded-md"><span class="font-bold text-gray-700">ไซส์ ${size}</span><span class="text-lg font-semibold text-indigo-600">${count} ตัว</span></li>`).join('');
-            pageContent.innerHTML = `<div class="space-y-6"><div class="bg-indigo-500 text-white p-6 rounded-lg shadow-md text-center"><p class="text-sm font-medium">จำนวนหนูทั้งหมดในฟาร์ม (โดยประมาณ)</p><p class="text-4xl font-extrabold mt-1">${totalRats}</p></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">คำนวณระยะเวลา</h2><div class="space-y-4"><div class="flex flex-col gap-4 items-end"><div class="w-full"><label for="target-size-select" class="block text-sm font-medium text-gray-700 mb-1">เลือกไซส์ที่ต้องการ</label><select id="target-size-select" class="w-full p-2 border border-gray-300 rounded-lg">${ratSizeOptions.map(opt => `<option value="${opt.size}">${opt.size}</option>`).join('')}</select></div><div class="w-full"><label for="target-quantity-input" class="block text-sm font-medium text-gray-700 mb-1">จำนวน (ตัว)</label><input type="number" id="target-quantity-input" min="1" value="1" class="w-full p-2 border border-gray-300 rounded-lg"></div><div class="w-full"><button id="calculate-days-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 transition-colors">คำนวณ</button></div></div><div id="calculation-result" class="text-center font-semibold text-lg text-gray-800 p-4 bg-blue-100 rounded-lg hidden"></div></div></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">โอกาสได้หนูในวันพรุ่งนี้</h2><ul class="space-y-2">${tomorrowList || '<li class="text-gray-500 p-4 rounded-md bg-white text-center">ไม่มีหนูที่คาดว่าจะได้ในวันพรุ่งนี้</li>'}</ul></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปจำนวนตามไซส์ปัจจุบัน (โดยประมาณ)</h2><ul class="space-y-2">${sizeDetails || '<li class="text-gray-500 p-4 rounded-md bg-white text-center">ยังไม่มีข้อมูลหนู</li>'}</ul></div></div>`;
-        }
-
-        function calculateDaysForTarget() {
-            const targetSize = document.getElementById('target-size-select').value;
-            const targetQuantity = parseInt(document.getElementById('target-quantity-input').value, 10);
-            const resultDiv = document.getElementById('calculation-result');
-            if (!targetSize || isNaN(targetQuantity) || targetQuantity <= 0) {
-                resultDiv.innerHTML = '<span class="text-red-500">กรุณาเลือกไซส์และจำนวนให้ถูกต้อง</span>';
-                resultDiv.classList.remove('hidden'); return;
-            }
-            const sizeInfo = ratSizeOptions.find(s => s.size === targetSize);
-            if (!sizeInfo) {
-                resultDiv.innerHTML = '<span class="text-red-500">ไม่พบข้อมูลไซส์</span>';
-                resultDiv.classList.remove('hidden'); return;
-            }
-            let finalDays = -1;
-            for (let d = 0; d < 100; d++) {
-                const count = allRats.filter(rat => (rat.weight + (((new Date() - new Date(rat.createdAt)) / 86400000) + d) * 0.9) >= sizeInfo.minWeight).length;
-                if (count >= targetQuantity) { finalDays = d; break; }
-            }
-            resultDiv.innerHTML = finalDays !== -1 ? `ต้องใช้เวลาประมาณ <span class="text-blue-600">${finalDays} วัน</span> เพื่อให้มีหนูไซส์ ${targetSize} จำนวน ${targetQuantity} ตัว` : `<span class="text-orange-500">มีหนูไม่พอที่จะโตถึงจำนวน ${targetQuantity} ตัว ภายใน 100 วัน</span>`;
-            resultDiv.classList.remove('hidden');
-        }
-        
-        function renderManagePage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            if (['user', 'ceo', 'officer'].includes(currentUserRole)) {
-                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div><div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
-            } else {
-                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${renderRatForm()}<div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
-                 renderMessagesOnManagePage();
-            }
-            renderManageOrderSummary();
-            handleFilterChange();
-        }
-
-        function renderMessagesOnManagePage() {
-            const container = document.getElementById('messages-container');
-            if (!container) return;
-            if (allMessages.length === 0) { container.innerHTML = ''; return; }
-            const messagesHtml = allMessages.map(msg => {
-                const bgColor = msg.type === 'completed' ? 'bg-green-100' : 'bg-red-100';
-                const borderColor = msg.type === 'completed' ? 'border-green-500' : 'border-red-500';
-                const textColor = msg.type === 'completed' ? 'text-green-700' : 'text-red-700';
-                return `
-                    <div class="${bgColor} border-l-4 ${borderColor} ${textColor} p-4 rounded-lg shadow-md mb-4">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <p class="font-bold">ข้อความจาก ${msg.fromName}</p>
-                                <p class="text-sm">เกี่ยวกับ Order: ${msg.orderName} (${msg.itemName})</p>
-                                <p class="mt-2">${msg.message}</p>
-                            </div>
-                            <button data-message-id="${msg.id}" class="mark-message-read text-sm font-semibold ${textColor === 'text-green-700' ? 'text-green-600 hover:text-green-800' : 'text-red-600 hover:text-red-800'}">รับทราบ</button>
-                        </div>
-                    </div>`;
-            }).join('');
-            container.innerHTML = `<h2 class="text-xl font-semibold text-gray-700 mb-4">ข้อความแจ้งเตือน</h2>${messagesHtml}`;
-        }
-        
-        function renderAdminPage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const usersHtml = allUsers.map(user => `
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-100 rounded-lg">
-                    <div><p class="font-bold text-gray-800">${user.name || '<i>ไม่มีชื่อ</i>'}</p><p class="text-sm text-gray-500">${user.email || '<i>ไม่มีอีเมล</i>'}</p></div>
-                    <div class="mt-2 sm:mt-0 flex items-center space-x-2">
-                        <select data-user-id="${user.id}" class="role-select p-2 border border-gray-300 rounded-lg">
-                            <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                            <option value="ceo" ${user.role === 'ceo' ? 'selected' : ''}>CEO</option>
-                            <option value="officer" ${user.role === 'officer' ? 'selected' : ''}>Officer</option>
-                            <option value="fattening_staff" ${user.role === 'fattening_staff' ? 'selected' : ''}>Fattening Staff</option>
-                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                        </select>
-                        ${user.id !== userId ? `<button data-user-id="${user.id}" class="delete-user-btn text-red-500 hover:text-red-700 p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg></button>` : ''}
-                    </div>
-                </div>`).join('');
-            pageContent.innerHTML = `<div class="space-y-6"><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">จัดการยศผู้ใช้</h2><div class="space-y-3">${usersHtml}</div></div></div>`;
-        }
-
-        function renderOrderPage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const orderColors = ['border-blue-500', 'border-pink-500', 'border-purple-500', 'border-green-500', 'border-yellow-500', 'border-indigo-500', 'border-red-500'];
-            const orderListHtml = allOrders.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map((order, index) => {
-                const colorClass = orderColors[index % orderColors.length];
-                const itemsHtml = order.items.map((item, itemIndex) => {
-                    const progress = item.quantity > 0 ? Math.min((item.sent / item.quantity) * 100, 100) : 0;
-                    const isComplete = item.sent >= item.quantity;
-                    const priorityText = item.priority === 'main' ? 'หลัก' : 'รอง';
-                    const weightText = item.minWeightTarget && item.maxWeightTarget ? `${item.minWeightTarget}-${item.maxWeightTarget}g` : 'ทุกน้ำหนัก';
-                    
-                    let statusHtml = '';
-                    if(isComplete && item.status === 'pending') {
-                        if(['admin', 'officer'].includes(currentUserRole)) {
-                            statusHtml = `<div class="mt-3 flex gap-2"><button data-order-id="${order.id}" data-item-index="${itemIndex}" class="mark-order-success w-full bg-green-500 text-white py-1 rounded-lg text-sm">สำเร็จ</button><button data-order-id="${order.id}" data-item-index="${itemIndex}" class="mark-order-fail w-full bg-red-500 text-white py-1 rounded-lg text-sm">ไม่สำเร็จ</button></div>`;
-                        }
-                    } else if (item.status && item.status !== 'pending') {
-                        statusHtml = `<div class="mt-3 text-center text-sm font-semibold ${item.status === 'completed' ? 'text-green-600' : 'text-red-600'}">${item.status === 'completed' ? 'ตรวจสอบแล้ว: สำเร็จ' : 'ตรวจสอบแล้ว: มีปัญหา'}</div>`;
-                    }
-
-                    return `<div class="bg-gray-50 p-3 rounded-lg border-l-4 ${isComplete ? 'border-green-500' : 'border-blue-500'}"><div class="flex justify-between items-center"><div><p class="font-semibold text-gray-700">ไซส์ ${item.size} <span class="text-sm font-normal">(${item.type})</span></p><p class="text-xs text-gray-500">${priorityText} / ${weightText}</p></div><p class="font-bold text-lg ${isComplete ? 'text-green-600' : 'text-blue-600'}">(${item.sent}/${item.quantity})</p></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-2.5 rounded-full" style="width: ${progress}%"></div></div>${statusHtml}</div>`;
-                }).join('');
-
-                const formattedDate = new Date(order.createdAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-                return `<div class="bg-white p-4 rounded-lg shadow-md border-l-4 ${colorClass}"><div class="flex justify-between items-start"><div><h3 class="text-xl font-bold text-gray-800">${order.name}</h3><p class="text-xs text-gray-500 mb-2">สร้างเมื่อ: ${formattedDate}</p></div>${['admin','officer'].includes(currentUserRole) ? `<button class="delete-order-btn text-red-400 hover:text-red-600 transition-colors" data-order-id="${order.id}"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : ''}</div><div class="space-y-3 mt-2">${itemsHtml}</div></div>`;
-            }).join('');
-            
-            pageContent.innerHTML = `<div class="space-y-6"><div class="flex justify-between items-center bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700">รายการ Order ทั้งหมด</h2>${['admin', 'officer'].includes(currentUserRole) ? `<button id="open-add-order-modal" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-blue-700 transition-colors text-base">+ เพิ่ม Order</button>` : ''}</div><div id="orders-list" class="space-y-4">${orderListHtml || '<div class="text-center text-gray-500 p-8">ยังไม่มี Order ในระบบ</div>'}</div></div>`;
-        }
-
-        function renderSizeOptions() {
-            return ratSizeOptions.map(opt => `<div class="w-full sm:w-auto"><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="w-full text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
-        }
-
-        function renderWeightOptions(selectedSize) {
-            const sizeData = ratSizeOptions.find(opt => opt.size === selectedSize);
-            if (!sizeData) return '';
-            const weightOptions = [];
-            for (let i = sizeData.minWeight; i <= sizeData.maxWeight; i++) {
-                weightOptions.push(`<div class="w-full sm:w-auto"><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="w-full text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
-            }
-            return weightOptions.join('');
-        }
-        
-        function renderRatForm() {
-            const rackOptions = Array.from({ length: 4 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
-            const shelfOptions = Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('');
-            const sideOptions = ['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('');
-            const godModeButton = `
-                <div class="flex items-center justify-center pt-4">
-                    <label for="god-mode-toggle" class="mr-3 font-semibold text-gray-700">GOD Mode:</label>
-                    <button id="god-mode-toggle" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${godModeEnabled ? 'bg-green-500' : 'bg-gray-300'}">
-                        <span class="sr-only">Enable GOD Mode</span>
-                        <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
-                    </button>
-                </div>`;
-
-            return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
-                         ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
-                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                             <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
-                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${shelfOptions}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${sideOptions}</select></div></div>
-                         </div>
-                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                             <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
-                             <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="flex flex-wrap gap-2">${renderSizeOptions()}</div></div>
-                             <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="flex flex-wrap gap-2">${renderWeightOptions(currentSize)}</div></div>
-                         </div>
-                         <div id="form-buttons" class="pt-4 grid grid-cols-2 gap-4"><button id="save-rat-btn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-colors duration-200">+ เพิ่ม</button><button id="send-order-btn" class="w-full bg-green-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-green-700 transition-colors duration-200">ส่ง</button><button id="delete-rat-btn" class="w-full bg-red-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-red-700 transition-colors duration-200">- ลบ</button><button id="clear-crate-btn" class="w-full bg-amber-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-amber-700 transition-colors duration-200">เคลียร์</button></div>
-                     </form>`;
-        }
-
-        function renderManageOrderSummary() {
-            const container = document.getElementById('manage-order-summary-container');
-            if (!container) return;
-            const activeOrders = allOrders.filter(order => order.items.some(item => item.sent < item.quantity)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            if (activeOrders.length === 0) { container.innerHTML = ''; return; }
-            const summaryHtml = activeOrders.map(order => `<div class="bg-white p-4 rounded-lg shadow-md border-l-4 border-gray-300"><h4 class="font-bold text-gray-800 truncate">${order.name}</h4><div class="mt-2 space-y-1">${order.items.filter(item => item.sent < item.quantity).map(item => `<div class="flex justify-between text-sm text-gray-600"><span>- ไซส์ ${item.size} (${item.type})</span><span class="font-medium">${item.sent}/${item.quantity}</span></div>`).join('')}</div></div>`).join('');
-            container.innerHTML = `<div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุป Order ที่ยังไม่เสร็จสิ้น</h2><div class="grid grid-cols-1 gap-4">${summaryHtml}</div></div>`;
-        }
-
-        function updateWeightOptions(selectedSize) {
-            const weightContainer = document.getElementById('rat-weight-options');
-            const weightGroup = document.getElementById('weight-group');
-            if(!weightContainer || !weightGroup) return;
-            if (selectedSize) {
-                if(currentSize !== selectedSize) currentWeight = '';
-                weightContainer.innerHTML = renderWeightOptions(selectedSize);
-                weightGroup.classList.remove('hidden');
-            } else {
-                weightGroup.classList.add('hidden');
-                weightContainer.innerHTML = '';
-            }
-        }
-
-        function handleFilterChange() {
-            const rackEl = document.getElementById('rat-rack'); const shelfEl = document.getElementById('rat-shelf'); const sideEl = document.getElementById('rat-side');
-            if(!rackEl || !shelfEl || !sideEl) return;
-            let filteredRats = allRats.filter(rat => (!rackEl.value || rat.rack === rackEl.value) && (!shelfEl.value || rat.shelf == shelfEl.value) && (!sideEl.value || rat.side === sideEl.value));
-            renderRatSummary(filteredRats);
-        }
-
-        function renderRatSummary(rats) {
-            const summaryContainer = document.getElementById('rat-summary');
-            if (!summaryContainer) return;
-            if (rats.length === 0) {
-                summaryContainer.innerHTML = '<div class="text-center text-gray-500 p-8">ยังไม่มีข้อมูลหนูในส่วนนี้</div>';
-                return;
-            }
-            const totalRats = rats.length;
-            const sizeCounts = rats.reduce((counts, rat) => {
-                counts[rat.size] = (counts[rat.size] || 0) + 1;
-                return counts;
-            }, {});
-            const sizeDetails = Object.entries(sizeCounts).map(([size, count]) => `<li class="flex justify-between items-center bg-gray-100 p-3 rounded-md"><span class="font-bold text-gray-700">ไซส์ ${size} (ตอนเพิ่ม)</span><span class="text-lg font-semibold text-indigo-600">${count} ตัว</span></li>`).join('');
-            summaryContainer.innerHTML = `<div class="space-y-4"><div class="bg-indigo-500 text-white p-6 rounded-lg shadow-md text-center"><p class="text-sm font-medium">จำนวนหนูในกระบะที่เลือก</p><p class="text-4xl font-extrabold mt-1">${totalRats}</p></div><div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-lg font-medium text-gray-800 mb-2">สรุปจำนวนตามไซส์</h3><ul class="space-y-2">${sizeDetails}</ul></div></div>`;
-        }
-
-        function predictRats(targetDate) {
-            const predictions = {};
-            ratSizeOptions.forEach(opt => predictions[opt.size] = 0);
-            allRats.forEach(rat => {
-                const daysDifference = (targetDate - new Date(rat.createdAt)) / 86400000;
-                if (daysDifference > 0) {
-                    const estimatedWeight = rat.weight + (daysDifference * 0.9);
-                    for (const sizeData of ratSizeOptions) {
-                        if (estimatedWeight >= sizeData.minWeight && estimatedWeight <= sizeData.maxWeight) {
-                            predictions[sizeData.size]++;
-                            break;
-                        }
-                    }
-                }
-            });
-            return predictions;
-        }
-
-        function renderError(message) {
-            document.getElementById('app-container').innerHTML = `<div class="flex-grow flex flex-col items-center justify-center text-red-500 text-center p-8"><svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg><h2 class="text-3xl font-bold mb-2">ข้อผิดพลาด</h2><p class="text-lg">${message}</p></div>`;
-        }
-
-        function renderAddOrderModal() {
-            return `<div id="add-order-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4 hidden"><div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg mx-auto space-y-6 transform transition-all duration-300 scale-95 opacity-0"><div class="flex justify-between items-center border-b pb-4"><h2 class="text-2xl font-bold text-gray-800">สร้าง Order ใหม่</h2><button type="button" id="close-modal-btn-order" class="text-gray-500 hover:text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div><form id="add-order-form" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2"><div><label for="order-name-input" class="block text-gray-700 font-medium">ชื่อ Order (ไม่จำเป็น)</label><input type="text" id="order-name-input" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2" placeholder="เช่น Order A"></div><div class="space-y-4" id="order-items-container"></div><div class="flex justify-center pt-2"><button type="button" id="add-order-item-btn" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-full hover:bg-gray-300"> + เพิ่มรายการ </button></div></form><div class="flex justify-end space-x-4 pt-4 border-t"><button type="button" id="close-modal-btn-order-footer" class="px-6 py-2 rounded-full font-semibold text-gray-600 hover:bg-gray-100 close-modal-btn">ยกเลิก</button><button type="submit" id="save-order-btn" form="add-order-form" class="px-6 py-2 rounded-full font-bold text-white bg-blue-600 hover:bg-blue-700">บันทึก Order</button></div></div></div>`;
-        }
-        
-        function renderIncompleteFeedbackModal() {
-             return `<div id="incomplete-feedback-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4 hidden"><div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md mx-auto space-y-4 transform transition-all duration-300 scale-95 opacity-0"><div class="flex justify-between items-center"><h2 class="text-xl font-bold text-gray-800">แจ้งปัญหา</h2><button type="button" id="close-modal-btn-feedback" class="text-gray-500 hover:text-gray-700 close-modal-btn">&times;</button></div><div><label for="feedback-textarea" class="block text-sm font-medium text-gray-700">รายละเอียดปัญหา</label><textarea id="feedback-textarea" rows="4" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2" placeholder="เช่น หนูน้ำหนักไม่ถึงเกณฑ์, etc."></textarea></div><div class="flex justify-end"><button id="send-feedback-btn" class="px-6 py-2 rounded-full font-bold text-white bg-blue-600 hover:bg-blue-700">ส่งข้อความ</button></div></div></div>`;
-        }
-
-        function addNewOrderItemRow() {
-            const container = document.getElementById('order-items-container');
-            const newRow = document.createElement('div');
-            newRow.className = 'bg-gray-100 p-4 rounded-lg shadow-inner border-l-4 border-blue-400 order-item-row space-y-3';
-            const sizeOptionsHtml = ratSizeOptions.map(opt => `<option value="${opt.size}">${opt.size}</option>`).join('');
-            const uniqueId = Date.now() + Math.random().toString(36).substr(2, 9);
-            newRow.innerHTML = `<div class="flex justify-end"><button type="button" class="remove-item-btn text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586l-1.293-1.293z" clip-rule="evenodd" /></svg></button></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">ไซส์</label><select class="size-select mt-1 block w-full rounded-lg border-gray-300 p-2">${sizeOptionsHtml}</select></div><div><label class="block text-sm font-medium text-gray-700">จำนวน</label><input type="number" class="quantity-input mt-1 block w-full rounded-lg border-gray-300 p-2" min="1" value="1"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700">ประเภท</label><div class="mt-1 flex gap-2"><label class="flex items-center"><input type="radio" name="type-${uniqueId}" value="หนูเป็น" checked class="text-blue-500 mr-1"><span class="text-sm">หนูเป็น</span></label><label class="flex items-center"><input type="radio" name="type-${uniqueId}" value="หนูแช่" class="text-blue-500 mr-1"><span class="text-sm">หนูแช่</span></label></div></div><div><label class="block text-sm font-medium text-gray-700">ลำดับความสำคัญ</label><div class="mt-1 flex gap-2"><label class="flex items-center"><input type="radio" name="priority-${uniqueId}" value="main" checked class="text-blue-500 mr-1"><span class="text-sm">หลัก</span></label><label class="flex items-center"><input type="radio" name="priority-${uniqueId}" value="secondary" class="text-blue-500 mr-1"><span class="text-sm">รอง</span></label></div></div></div><div><label class="block text-sm font-medium text-gray-700">ช่วงน้ำหนัก (ไม่บังคับ)</label><div class="mt-1 flex items-center gap-2"><input type="number" class="min-weight-input w-full rounded-lg border-gray-300 p-2" placeholder="ต่ำสุด (g)"><span>-</span><input type="number" class="max-weight-input w-full rounded-lg border-gray-300 p-2" placeholder="สูงสุด (g)"></div></div>`;
-            container.appendChild(newRow);
-        }
-
-        function alertMessage(message) {
-            const alertBox = document.createElement('div');
-            alertBox.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50 transition-all duration-300 transform scale-0 opacity-0';
-            alertBox.textContent = message;
-            document.body.appendChild(alertBox);
-            setTimeout(() => alertBox.classList.add('scale-100', 'opacity-100'), 10);
-            setTimeout(() => {
-                alertBox.classList.remove('scale-100', 'opacity-100');
-                setTimeout(() => alertBox.remove(), 3000);
-            }, 3000);
-        }
-    </script>
-     <style>
-        @keyframes fade-in {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-            animation: fade-in 0.5s ease-out forwards;
-        }
-    </style>
-</head>
-<body class="bg-gray-100 text-gray-800 font-sans p-4">
-    <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center">
-        <div class="flex-grow flex items-center justify-center text-gray-500">
-            <svg class="animate-spin h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-             <p class="ml-2">กำลังโหลดข้อมูล...</p>
-        </div>
-    </div>
-</body>
-</html>
+                        data:
