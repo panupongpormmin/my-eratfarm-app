@@ -78,7 +78,7 @@
                             godModeEnabled = localStorage.getItem('godModeEnabled') === 'true';
                             await checkUserRole(user);
                             isAuthReady = true;
-                            listenToRats();
+                            listenToRats(); // This will trigger the first render
                             listenToOrders();
                             if (['admin', 'fattening_staff'].includes(currentUserRole)) {
                                 listenToMessages();
@@ -214,6 +214,8 @@
             }
         }
 
+        // --- START: BUG FIX (STABILITY) ---
+        // ปรับปรุง Event Listener และเพิ่มฟังก์ชันอัปเดต UI เฉพาะส่วน
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -262,31 +264,24 @@
                 else if (target.classList.contains('mark-message-read')) { e.preventDefault(); await markMessageAsRead(target.dataset.messageId); }
                 else if (target.classList.contains('delete-user-btn')) { e.preventDefault(); await deleteUserAccount(target.dataset.userId); }
             });
-            
-            // --- START: BUG FIX ---
-            // แก้ไข Event listener ให้เรียกฟังก์ชันที่ถูกต้องเพื่อป้องกัน Loop
+
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
-                    // อ่านค่าจาก DOM ทั้งหมดเมื่อมีการเปลี่ยนแปลง
                     currentRack = document.getElementById('rat-rack').value;
                     currentShelf = document.getElementById('rat-shelf').value;
                     currentSide = document.getElementById('rat-side').value;
-                    // เรียก handleFilterChange ที่จะอัปเดตเฉพาะส่วนของ Summary
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
-                    currentWeight = ''; // Reset weight when size changes
-                    // วาดฟอร์มใหม่เพื่อแสดงตัวเลือกน้ำหนัก แต่ไม่วาดทั้งแอป
+                    currentWeight = '';
                     updateRatFormUI(); 
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
-                    // ไม่ต้องทำอะไรที่นี่ เพราะค่าถูกบันทึกแล้ว
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
                 }
             });
-            // --- END: BUG FIX ---
         }
         
         async function deleteOrder(orderId) {
@@ -1016,7 +1011,6 @@
                  renderMessagesOnManagePage();
             }
             renderManageOrderSummary();
-            // เรียก renderRatSummary โดยตรงเมื่อหน้าถูกวาดครั้งแรก
             renderRatSummary();
         }
         // --- END: BUG FIX ---
