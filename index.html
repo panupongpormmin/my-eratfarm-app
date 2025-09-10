@@ -688,6 +688,7 @@
             
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
+                    <!-- Stat Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-blue-100 p-4 rounded-lg shadow-md"><h3 class="text-blue-800 font-bold text-sm">หนูทั้งหมด</h3><p class="text-3xl font-bold text-blue-900">${metrics.totalRats}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg shadow-md"><h3 class="text-green-800 font-bold text-sm">Order ที่ใช้งาน</h3><p class="text-3xl font-bold text-green-900">${metrics.activeOrders}</p></div>
@@ -695,6 +696,7 @@
                         <div class="bg-purple-100 p-4 rounded-lg shadow-md"><h3 class="text-purple-800 font-bold text-sm">อายุเฉลี่ย (วัน)</h3><p class="text-3xl font-bold text-purple-900">${metrics.avgRatAge}</p></div>
                     </div>
 
+                    <!-- Charts -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูตามไซส์ปัจจุบัน</h3><canvas id="inventory-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สถานะการส่ง Order</h3><canvas id="fulfillment-chart"></canvas></div>
@@ -702,7 +704,8 @@
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สรุปจำนวนหนูที่เข้า-ออกใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
                     </div>
 
-                     <div class="bg-white p-4 rounded-lg shadow-lg">
+                     <!-- High Priority Items Table -->
+                    <div class="bg-white p-4 rounded-lg shadow-lg">
                         <h3 class="font-bold mb-2 text-gray-700">รายการ Order ที่ต้องการเร่งด่วน</h3>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm text-left text-gray-500">
@@ -1106,7 +1109,7 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-                
+            
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
@@ -1164,7 +1167,7 @@
             renderApp();
         }
 
-        function renderRatSummary() {
+        function renderRatSummary(rats) {
             const summaryContainer = document.getElementById('rat-summary');
             if (!summaryContainer) return;
 
