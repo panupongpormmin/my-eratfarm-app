@@ -212,6 +212,8 @@
             }
         }
 
+        // --- START: LOCATION UI CHANGE 2 ---
+        // เพิ่ม Event Listener สำหรับปุ่มเลือกตำแหน่งใหม่
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -223,10 +225,20 @@
                 else if (id.startsWith('nav-')) {
                     currentPage = id.split('-')[1];
                     renderApp();
-                } else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
+                } 
+                // --- ส่วนจัดการปุ่มควบคุมหลัก ---
+                else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
                 else if (id === 'clear-crate-btn') { e.preventDefault(); await clearCrate(); }
+                // --- ส่วนจัดการปุ่มเลือกตำแหน่ง ---
+                else if (target.classList.contains('location-button')) {
+                    e.preventDefault();
+                    currentShelf = target.dataset.shelf;
+                    currentSide = target.dataset.side;
+                    handleFilterChange(); // อัปเดต UI ทันที
+                }
+                // --- ส่วนอื่นๆ ---
                 else if (id === 'god-mode-toggle') {
                     godModeEnabled = !godModeEnabled;
                     localStorage.setItem('godModeEnabled', godModeEnabled);
@@ -265,10 +277,8 @@
 
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
-                if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
-                    currentRack = document.getElementById('rat-rack').value;
-                    currentShelf = document.getElementById('rat-shelf').value;
-                    currentSide = document.getElementById('rat-side').value;
+                if (target.id === 'rat-rack') { // เหลือแค่ Rack ที่ใช้ change event
+                    currentRack = target.value;
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
@@ -285,6 +295,7 @@
                 }
             });
         }
+        // --- END: LOCATION UI CHANGE 2 ---
         
         async function deleteOrder(orderId) {
             if (!['admin', 'officer'].includes(currentUserRole)) return;
@@ -1112,9 +1123,9 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-
+            
             // --- START: TEXT OVERFLOW FIX ---
-            // เปลี่ยน container ของปุ่ม size และ weight เป็น grid 3 คอลัมน์
+            // ปรับจำนวนคอลัมน์ของ grid สำหรับ size และ weight เป็น 3 คอลัมน์
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
