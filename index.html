@@ -46,6 +46,7 @@
         let currentWeight = '';
         let godModeEnabled = false;
         let chartInstances = {};
+        let useMarkedLocations = false;
 
 
         const ratSizeOptions = [
@@ -296,7 +297,47 @@
                 alertMessage("เกิดข้อผิดพลาดในการลบ Order");
             }
         }
-        
+
+        // --- START: BUG FIX ---
+        // แก้ไขฟังก์ชัน clearCrate
+        async function clearCrate() {
+            if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
+            if (!currentRack || !currentShelf || !currentSide) {
+                alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
+                return;
+            }
+            
+            const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                where("rack", "==", currentRack),
+                where("shelf", "==", currentShelf),
+                where("side", "==", currentSide));
+
+            try {
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    alertMessage("ไม่พบหนูในกระบะนี้");
+                    return;
+                }
+
+                const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
+                await Promise.all(deletePromises);
+                alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
+                
+                // รีเซ็ตค่า State
+                currentRack = '';
+                currentShelf = '';
+                currentSide = '';
+                
+                // สั่งให้วาดหน้าจอใหม่เพื่ออัปเดต UI ทั้งหมด
+                renderApp(); 
+
+            } catch(error) {
+                console.error("Error clearing crate:", error);
+                alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
+            }
+        }
+        // --- END: BUG FIX ---
+
         async function markMessageAsRead(messageId) {
             if(!['admin', 'fattening_staff'].includes(currentUserRole)) return;
             try {
@@ -652,7 +693,7 @@
             if (!pageContent) return;
 
             const metrics = calculateDashboardMetrics();
-            
+
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -698,9 +739,6 @@
                 </div>
             `;
             
-            // --- START: BUG FIX ---
-            // ย้ายโค้ดการสร้าง Chart ทั้งหมดมาไว้นอก setTimeout
-            // เพื่อให้กราฟถูกวาดทันทีหลังจากสร้าง HTML เสร็จ
             const inventoryLabels = ratSizeOptions.map(s => s.size);
             const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
 
@@ -708,7 +746,6 @@
             createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
             createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
             
-            // สร้างกราฟ 'growth-chart' แบบ 2 เส้น
             const growthCtx = document.getElementById('growth-chart');
             if (growthCtx) {
                 chartInstances['growth-chart'] = new Chart(growthCtx, {
@@ -745,14 +782,12 @@
                     }
                 });
             }
-            // --- END: BUG FIX ---
         }
 
         function calculateDashboardMetrics() {
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-            // --- Inventory Metrics ---
             const totalRats = allRats.length;
             let totalRatAgeDays = 0;
             const ratCountBySize = {};
@@ -778,7 +813,6 @@
             });
             const avgRatAge = totalRats > 0 ? (totalRatAgeDays / totalRats).toFixed(1) : 0;
             
-            // --- Order Metrics ---
             let totalPendingItems = 0;
             let totalItemsSent = 0;
             const priorityItems = [];
@@ -804,7 +838,6 @@
 
             priorityItems.sort((a,b) => b.remaining - a.remaining || a.createdAt - b.createdAt);
             
-            // --- Daily Activity Metrics ---
             const dailyActivity = {};
             const dailyLabels = [];
             for (let i = 6; i >= 0; i--) {
@@ -815,7 +848,6 @@
                 dailyActivity[label] = { added: 0, removed: 0 };
             }
 
-            // คำนวณข้อมูลหนูที่เพิ่ม (จากข้อมูลจริง)
             allRats.forEach(rat => {
                 const createdAt = new Date(rat.createdAt);
                 if (createdAt >= new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)) {
@@ -826,23 +858,20 @@
                 }
             });
 
-            // !! หมายเหตุ: ส่วนนี้เป็นการจำลองข้อมูล 'หนูที่ลดลง'
-            // คุณต้องนำข้อมูลจริงที่บันทึกไว้มาใส่แทนส่วนนี้
             const simulatedRemovedData = {
-                [dailyLabels[0]]: 2,  // 6 วันก่อน
-                [dailyLabels[1]]: 5,  // 5 วันก่อน
-                [dailyLabels[2]]: 1,  // 4 วันก่อน
-                [dailyLabels[3]]: 8,  // 3 วันก่อน
-                [dailyLabels[4]]: 4,  // 2 วันก่อน
-                [dailyLabels[5]]: 12, // 1 วันก่อน
-                [dailyLabels[6]]: 7   // วันนี้
+                [dailyLabels[0]]: 2,
+                [dailyLabels[1]]: 5,
+                [dailyLabels[2]]: 1,
+                [dailyLabels[3]]: 8,
+                [dailyLabels[4]]: 4,
+                [dailyLabels[5]]: 12,
+                [dailyLabels[6]]: 7
             };
             Object.keys(simulatedRemovedData).forEach(label => {
                 if(dailyActivity.hasOwnProperty(label)) {
                     dailyActivity[label].removed = simulatedRemovedData[label];
                 }
             });
-            // !! จบส่วนจำลองข้อมูล
 
             return {
                 totalRats,
@@ -861,7 +890,6 @@
             };
         }
 
-        // NEW GENERIC CHART CREATION FUNCTIONS
         function createBarChart(canvasId, labels, data, chartLabel) {
             const ctx = document.getElementById(canvasId);
             if (!ctx) return;
