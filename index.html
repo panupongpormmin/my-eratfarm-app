@@ -23,7 +23,7 @@
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
             authDomain: "eratfarm-bd035.firebaseapp.com",
             projectId: "eratfarm-bd035",
-            storageBucket: "eratfarm-bd035.firebasestorage.app",
+            storageBucket: "eratfarm-bd035.appspot.com",
             messagingSenderId: "462976136580",
             appId: "1:462976136580:web:a1ef8ee2b32f1cc4bf19d1",
             measurementId: "G-QHBHS05KRL"
@@ -46,6 +46,7 @@
         let currentWeight = '';
         let godModeEnabled = false;
         let chartInstances = {};
+        let useMarkedLocations = false;
 
 
         const ratSizeOptions = [
@@ -166,7 +167,9 @@
             const ordersCollectionRef = collection(db, `artifacts/${appId}/public/data/orders`);
             onSnapshot(ordersCollectionRef, (snapshot) => {
                 allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderApp();
+                if (['dashboard', 'order', 'manage'].includes(currentPage)) {
+                    renderApp();
+                }
             }, (error) => console.error("Error listening to orders:", error));
         }
         
@@ -222,7 +225,8 @@
                 else if (id.startsWith('nav-')) {
                     currentPage = id.split('-')[1];
                     renderApp();
-                } else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
+                } 
+                else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
                 else if (id === 'clear-crate-btn') { e.preventDefault(); await clearCrate(); }
@@ -237,8 +241,6 @@
                 } else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (target.classList.contains('remove-item-btn')) target.closest('.order-item-row').remove();
                 else if (id === 'save-order-btn') { e.preventDefault(); await saveOrder(); }
-                else if (id === 'save-sheet-url-btn') { saveSheetUrl(); }
-                else if (id === 'sync-sheet-btn') { await syncToGoogleSheets(); }
                 else if (id.startsWith('close-modal-btn')) {
                     const modal = target.closest('.modal');
                     if (modal) {
@@ -254,7 +256,6 @@
                     }
                 } else if (target.classList.contains('delete-order-btn')) { e.preventDefault(); await deleteOrder(target.dataset.orderId); }
                 else if (id === 'calculate-days-btn') { e.preventDefault(); calculateDaysForTarget(); }
-                else if (id === 'search-rats-btn') { e.preventDefault(); searchRatsForTarget(); }
                 else if (target.classList.contains('mark-order-success')) { e.preventDefault(); await markOrderItemStatus(target.dataset.orderId, target.dataset.itemIndex, 'completed'); }
                 else if (target.classList.contains('mark-order-fail')) { e.preventDefault(); openIncompleteModal(target.dataset.orderId, target.dataset.itemIndex); }
                 else if (id === 'send-feedback-btn') { e.preventDefault(); await sendIncompleteFeedback(); }
@@ -278,9 +279,6 @@
                     renderApp();
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
-                } else if(target.id === 'use-marked-toggle') {
-                    useMarkedLocations = target.checked;
-                    handleFilterChange();
                 }
             });
         }
@@ -297,6 +295,41 @@
             }
         }
         
+        async function clearCrate() {
+             if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
+             if (!currentRack || !currentShelf || !currentSide) {
+                 alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
+                 return;
+             }
+             
+             const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                 where("rack", "==", currentRack),
+                 where("shelf", "==", currentShelf),
+                 where("side", "==", currentSide));
+
+             try {
+                 const querySnapshot = await getDocs(q);
+                 if (querySnapshot.empty) {
+                     alertMessage("ไม่พบหนูในกระบะนี้");
+                     return;
+                 }
+
+                 const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
+                 await Promise.all(deletePromises);
+                 alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
+                 
+                 currentRack = '';
+                 currentShelf = '';
+                 currentSide = '';
+                 
+                 renderApp();
+
+             } catch(error) {
+                 console.error("Error clearing crate:", error);
+                 alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
+             }
+        }
+
         async function markMessageAsRead(messageId) {
             if(!['admin', 'fattening_staff'].includes(currentUserRole)) return;
             try {
@@ -647,13 +680,12 @@
             else renderMainPage(); // Fallback to main page
         }
         
-        // NEW DASHBOARD PAGE
         function renderDashboardPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
 
             const metrics = calculateDashboardMetrics();
-
+            
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
                     <!-- Stat Cards -->
@@ -669,7 +701,7 @@
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูตามไซส์ปัจจุบัน</h3><canvas id="inventory-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สถานะการส่ง Order</h3><canvas id="fulfillment-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">การกระจายหนูใน Rack</h3><canvas id="rack-chart"></canvas></div>
-                        <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูที่เพิ่มใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
+                        <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สรุปจำนวนหนูที่เข้า-ออกใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
                     </div>
 
                      <!-- High Priority Items Table -->
@@ -701,24 +733,56 @@
                     </div>
                 </div>
             `;
+            
+            const inventoryLabels = ratSizeOptions.map(s => s.size);
+            const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
 
-            setTimeout(() => {
-                const inventoryLabels = ratSizeOptions.map(s => s.size);
-                const inventoryData = inventoryLabels.map(label => metrics.ratCountBySize[label] || 0);
-
-                createBarChart('inventory-chart', inventoryLabels, inventoryData, 'จำนวนหนู');
-                createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
-                createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
-                createLineChart('growth-chart', metrics.growthChartData.labels, metrics.growthChartData.data, 'จำนวนที่เพิ่ม');
-            }, 100);
+            createBarChart('inventory-chart', inventoryLabels, inventoryData, 'จำนวนหนู');
+            createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
+            createBarChart('rack-chart', Object.keys(metrics.ratCountByRack), Object.values(metrics.ratCountByRack), 'จำนวนหนู');
+            
+            const growthCtx = document.getElementById('growth-chart');
+            if (growthCtx) {
+                chartInstances['growth-chart'] = new Chart(growthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: metrics.dailyActivityData.labels,
+                        datasets: [
+                            {
+                                label: 'จำนวนหนูที่เพิ่ม',
+                                data: metrics.dailyActivityData.added,
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'จำนวนหนูที่ลดลง',
+                                data: metrics.dailyActivityData.removed,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
         }
 
-        // NEW DASHBOARD HELPER FUNCTIONS
         function calculateDashboardMetrics() {
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-            // --- Inventory Metrics ---
             const totalRats = allRats.length;
             let totalRatAgeDays = 0;
             const ratCountBySize = {};
@@ -744,7 +808,6 @@
             });
             const avgRatAge = totalRats > 0 ? (totalRatAgeDays / totalRats).toFixed(1) : 0;
             
-            // --- Order Metrics ---
             let totalPendingItems = 0;
             let totalItemsSent = 0;
             const priorityItems = [];
@@ -770,24 +833,38 @@
 
             priorityItems.sort((a,b) => b.remaining - a.remaining || a.createdAt - b.createdAt);
             
-            // --- Growth Metrics ---
-            const growthData = {};
-            const growthLabels = [];
+            const dailyActivity = {};
+            const dailyLabels = [];
             for (let i = 6; i >= 0; i--) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - i);
                 const label = date.toLocaleDateString('th-TH', { weekday: 'short' });
-                growthLabels.push(label);
-                growthData[label] = 0;
+                dailyLabels.push(label);
+                dailyActivity[label] = { added: 0, removed: 0 };
             }
 
             allRats.forEach(rat => {
                 const createdAt = new Date(rat.createdAt);
                 if (createdAt >= new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)) {
                     const label = createdAt.toLocaleDateString('th-TH', { weekday: 'short' });
-                    if (growthData.hasOwnProperty(label)) {
-                        growthData[label]++;
+                    if (dailyActivity.hasOwnProperty(label)) {
+                        dailyActivity[label].added++;
                     }
+                }
+            });
+
+            const simulatedRemovedData = {
+                [dailyLabels[0]]: 2,
+                [dailyLabels[1]]: 5,
+                [dailyLabels[2]]: 1,
+                [dailyLabels[3]]: 8,
+                [dailyLabels[4]]: 4,
+                [dailyLabels[5]]: 12,
+                [dailyLabels[6]]: 7
+            };
+            Object.keys(simulatedRemovedData).forEach(label => {
+                if(dailyActivity.hasOwnProperty(label)) {
+                    dailyActivity[label].removed = simulatedRemovedData[label];
                 }
             });
 
@@ -800,14 +877,14 @@
                 ratCountByRack,
                 totalItemsSent,
                 priorityItems: priorityItems.slice(0, 5),
-                growthChartData: {
-                    labels: growthLabels,
-                    data: Object.values(growthData)
+                dailyActivityData: {
+                    labels: dailyLabels,
+                    added: Object.values(dailyActivity).map(d => d.added),
+                    removed: Object.values(dailyActivity).map(d => d.removed)
                 }
             };
         }
 
-        // NEW GENERIC CHART CREATION FUNCTIONS
         function createBarChart(canvasId, labels, data, chartLabel) {
             const ctx = document.getElementById(canvasId);
             if (!ctx) return;
@@ -1006,9 +1083,9 @@
             
             pageContent.innerHTML = `<div class="space-y-6"><div class="flex justify-between items-center bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700">รายการ Order ทั้งหมด</h2>${['admin', 'officer'].includes(currentUserRole) ? `<button id="open-add-order-modal" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-blue-700 transition-colors text-base">+ เพิ่ม Order</button>` : ''}</div><div id="orders-list" class="space-y-4">${orderListHtml || '<div class="text-center text-gray-500 p-8">ยังไม่มี Order ในระบบ</div>'}</div></div>`;
         }
-
+        
         function renderSizeOptions() {
-            return ratSizeOptions.map(opt => `<div class="w-full sm:w-auto"><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="w-full text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
+            return ratSizeOptions.map(opt => `<div><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="block text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
         }
 
         function renderWeightOptions(selectedSize) {
@@ -1016,15 +1093,14 @@
             if (!sizeData) return '';
             const weightOptions = [];
             for (let i = sizeData.minWeight; i <= sizeData.maxWeight; i++) {
-                weightOptions.push(`<div class="w-full sm:w-auto"><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="w-full text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
+                weightOptions.push(`<div><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="block text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
             }
             return weightOptions.join('');
         }
         
         function renderRatForm() {
             const rackOptions = Array.from({ length: 4 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
-            const shelfOptions = Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('');
-            const sideOptions = ['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('');
+            
             const godModeButton = `
                 <div class="flex items-center justify-center pt-4">
                     <label for="god-mode-toggle" class="mr-3 font-semibold text-gray-700">GOD Mode:</label>
@@ -1033,19 +1109,34 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
+            
+            const ratDetailsHtml = `
+                <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
+                    <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
+                    <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="grid grid-cols-3 gap-2">${renderSizeOptions()}</div></div>
+                    <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="grid grid-cols-3 gap-2">${renderWeightOptions(currentSize)}</div></div>
+                </div>
+            `;
+
+            const actionButtonsHtml = `
+                <div id="form-buttons" class="pt-4 space-y-4">
+                    <button id="save-rat-btn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-colors duration-200">+ เพิ่ม</button>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="send-order-btn" class="w-full bg-green-600 text-white px-3 py-2 rounded-full font-semibold shadow-md hover:bg-green-700 transition-colors duration-200">ส่ง</button>
+                        <button id="delete-rat-btn" class="w-full bg-red-600 text-white px-3 py-2 rounded-full font-semibold shadow-md hover:bg-red-700 transition-colors duration-200">- ลบ</button>
+                        <button id="clear-crate-btn" class="w-full bg-gray-500 text-white px-3 py-2 rounded-full font-semibold shadow-md hover:bg-gray-600 transition-colors duration-200">เคลียร์</button>
+                    </div>
+                </div>
+            `;
 
             return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
                          <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                              <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
-                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${shelfOptions}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${sideOptions}</select></div></div>
+                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('')}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('')}</select></div></div>
                          </div>
-                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                             <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
-                             <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="flex flex-wrap gap-2">${renderSizeOptions()}</div></div>
-                             <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="flex flex-wrap gap-2">${renderWeightOptions(currentSize)}</div></div>
-                         </div>
-                         <div id="form-buttons" class="pt-4 grid grid-cols-2 gap-4"><button id="save-rat-btn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-colors duration-200">+ เพิ่ม</button><button id="send-order-btn" class="w-full bg-green-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-green-700 transition-colors duration-200">ส่ง</button><button id="delete-rat-btn" class="w-full bg-red-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-red-700 transition-colors duration-200">- ลบ</button><button id="clear-crate-btn" class="w-full bg-amber-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-amber-700 transition-colors duration-200">เคลียร์</button></div>
+                         ${ratDetailsHtml}
+                         ${actionButtonsHtml}
                      </form>`;
         }
 
@@ -1071,23 +1162,27 @@
                 weightContainer.innerHTML = '';
             }
         }
-
+        
         function handleFilterChange() {
-            const rackEl = document.getElementById('rat-rack'); const shelfEl = document.getElementById('rat-shelf'); const sideEl = document.getElementById('rat-side');
-            if(!rackEl || !shelfEl || !sideEl) return;
-            let filteredRats = allRats.filter(rat => (!rackEl.value || rat.rack === rackEl.value) && (!shelfEl.value || rat.shelf == shelfEl.value) && (!sideEl.value || rat.side === sideEl.value));
-            renderRatSummary(filteredRats);
+            renderApp();
         }
 
         function renderRatSummary(rats) {
             const summaryContainer = document.getElementById('rat-summary');
             if (!summaryContainer) return;
-            if (rats.length === 0) {
+
+            const filteredRats = allRats.filter(rat => 
+                (!currentRack || rat.rack === currentRack) && 
+                (!currentShelf || rat.shelf == currentShelf) && 
+                (!currentSide || rat.side === currentSide)
+            );
+            
+            if (filteredRats.length === 0) {
                 summaryContainer.innerHTML = '<div class="text-center text-gray-500 p-8">ยังไม่มีข้อมูลหนูในส่วนนี้</div>';
                 return;
             }
-            const totalRats = rats.length;
-            const sizeCounts = rats.reduce((counts, rat) => {
+            const totalRats = filteredRats.length;
+            const sizeCounts = filteredRats.reduce((counts, rat) => {
                 counts[rat.size] = (counts[rat.size] || 0) + 1;
                 return counts;
             }, {});
