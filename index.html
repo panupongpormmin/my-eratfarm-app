@@ -78,7 +78,7 @@
                             godModeEnabled = localStorage.getItem('godModeEnabled') === 'true';
                             await checkUserRole(user);
                             isAuthReady = true;
-                            listenToRats(); // This will trigger the first render
+                            listenToRats();
                             listenToOrders();
                             if (['admin', 'fattening_staff'].includes(currentUserRole)) {
                                 listenToMessages();
@@ -262,25 +262,31 @@
                 else if (target.classList.contains('mark-message-read')) { e.preventDefault(); await markMessageAsRead(target.dataset.messageId); }
                 else if (target.classList.contains('delete-user-btn')) { e.preventDefault(); await deleteUserAccount(target.dataset.userId); }
             });
-
+            
+            // --- START: BUG FIX ---
+            // แก้ไข Event listener ให้เรียกฟังก์ชันที่ถูกต้องเพื่อป้องกัน Loop
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
+                    // อ่านค่าจาก DOM ทั้งหมดเมื่อมีการเปลี่ยนแปลง
                     currentRack = document.getElementById('rat-rack').value;
                     currentShelf = document.getElementById('rat-shelf').value;
                     currentSide = document.getElementById('rat-side').value;
+                    // เรียก handleFilterChange ที่จะอัปเดตเฉพาะส่วนของ Summary
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
-                    updateWeightOptions(currentSize);
-                    renderApp();
+                    currentWeight = ''; // Reset weight when size changes
+                    // วาดฟอร์มใหม่เพื่อแสดงตัวเลือกน้ำหนัก แต่ไม่วาดทั้งแอป
+                    updateRatFormUI(); 
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
-                    renderApp();
+                    // ไม่ต้องทำอะไรที่นี่ เพราะค่าถูกบันทึกแล้ว
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
                 }
             });
+            // --- END: BUG FIX ---
         }
         
         async function deleteOrder(orderId) {
@@ -688,7 +694,6 @@
             
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
-                    <!-- Stat Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-blue-100 p-4 rounded-lg shadow-md"><h3 class="text-blue-800 font-bold text-sm">หนูทั้งหมด</h3><p class="text-3xl font-bold text-blue-900">${metrics.totalRats}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg shadow-md"><h3 class="text-green-800 font-bold text-sm">Order ที่ใช้งาน</h3><p class="text-3xl font-bold text-green-900">${metrics.activeOrders}</p></div>
@@ -696,7 +701,6 @@
                         <div class="bg-purple-100 p-4 rounded-lg shadow-md"><h3 class="text-purple-800 font-bold text-sm">อายุเฉลี่ย (วัน)</h3><p class="text-3xl font-bold text-purple-900">${metrics.avgRatAge}</p></div>
                     </div>
 
-                    <!-- Charts -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">จำนวนหนูตามไซส์ปัจจุบัน</h3><canvas id="inventory-chart"></canvas></div>
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สถานะการส่ง Order</h3><canvas id="fulfillment-chart"></canvas></div>
@@ -704,8 +708,7 @@
                         <div class="bg-white p-4 rounded-lg shadow-lg"><h3 class="font-bold mb-2 text-center text-gray-700">สรุปจำนวนหนูที่เข้า-ออกใน 7 วันล่าสุด</h3><canvas id="growth-chart"></canvas></div>
                     </div>
 
-                     <!-- High Priority Items Table -->
-                    <div class="bg-white p-4 rounded-lg shadow-lg">
+                     <div class="bg-white p-4 rounded-lg shadow-lg">
                         <h3 class="font-bold mb-2 text-gray-700">รายการ Order ที่ต้องการเร่งด่วน</h3>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm text-left text-gray-500">
@@ -996,18 +999,27 @@
             resultDiv.classList.remove('hidden');
         }
         
+        // --- START: BUG FIX ---
+        // ปรับปรุงฟังก์ชัน renderManagePage และ handleFilterChange
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
+            
+            const formHtml = renderRatForm();
+            const summaryHtml = `<div id="rat-summary-container" class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div>`;
+            const orderSummaryHtml = `<div id="manage-order-summary-container" class="mt-6"></div>`;
+
             if (['user', 'ceo', 'officer'].includes(currentUserRole)) {
-                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div><div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
+                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>${orderSummaryHtml}${summaryHtml}</div>`;
             } else {
-                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${renderRatForm()}<div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
+                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${formHtml}${orderSummaryHtml}${summaryHtml}</div>`;
                  renderMessagesOnManagePage();
             }
             renderManageOrderSummary();
-            handleFilterChange();
+            // เรียก renderRatSummary โดยตรงเมื่อหน้าถูกวาดครั้งแรก
+            renderRatSummary();
         }
+        // --- END: BUG FIX ---
 
         function renderMessagesOnManagePage() {
             const container = document.getElementById('messages-container');
@@ -1109,7 +1121,7 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-                
+            
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
@@ -1163,9 +1175,35 @@
             }
         }
         
+        // --- START: BUG FIX ---
+        // ฟังก์ชันนี้จะอัปเดตเฉพาะส่วนของ Summary เท่านั้น เพื่อไม่ให้เกิด Loop
         function handleFilterChange() {
-            renderApp();
+            renderRatSummary();
         }
+
+        function updateRatFormUI() {
+             const formContainer = document.querySelector('#add-rat-form');
+             if(formContainer) formContainer.outerHTML = renderRatForm();
+        }
+
+        function renderManagePage() {
+            const pageContent = document.getElementById('page-content');
+            if (!pageContent) return;
+            
+            const formHtml = renderRatForm();
+            const summaryHtml = `<div id="rat-summary-container" class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div>`;
+            const orderSummaryHtml = `<div id="manage-order-summary-container" class="mt-6"></div>`;
+
+            if (['user', 'ceo', 'officer'].includes(currentUserRole)) {
+                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>${orderSummaryHtml}${summaryHtml}</div>`;
+            } else {
+                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${formHtml}${orderSummaryHtml}${summaryHtml}</div>`;
+                 renderMessagesOnManagePage();
+            }
+            renderManageOrderSummary();
+            renderRatSummary();
+        }
+        // --- END: BUG FIX ---
 
         function renderRatSummary() {
             const summaryContainer = document.getElementById('rat-summary');
