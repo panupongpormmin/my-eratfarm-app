@@ -1085,6 +1085,7 @@
         }
         
         function renderSizeOptions() {
+            // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Grid จัดการขนาดเอง
             return ratSizeOptions.map(opt => `<div><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="block text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
         }
 
@@ -1093,6 +1094,7 @@
             if (!sizeData) return '';
             const weightOptions = [];
             for (let i = sizeData.minWeight; i <= sizeData.maxWeight; i++) {
+                // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Grid จัดการขนาดเอง
                 weightOptions.push(`<div><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="block text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
             }
             return weightOptions.join('');
@@ -1111,8 +1113,17 @@
                     </button>
                 </div>`;
 
-            // --- START: BUTTON UI REFINEMENT ---
-            // ปรับปรุง Layout ของปุ่มควบคุมหลัก
+            // --- START: TEXT OVERFLOW FIX ---
+            // เปลี่ยน container ของปุ่ม size และ weight เป็น grid 3 คอลัมน์
+            const ratDetailsHtml = `
+                <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
+                    <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
+                    <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="grid grid-cols-3 gap-2">${renderSizeOptions()}</div></div>
+                    <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="grid grid-cols-3 gap-2">${renderWeightOptions(currentSize)}</div></div>
+                </div>
+            `;
+            // --- END: TEXT OVERFLOW FIX ---
+
             const actionButtonsHtml = `
                 <div id="form-buttons" class="pt-4 space-y-4">
                     <button id="save-rat-btn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-colors duration-200">+ เพิ่ม</button>
@@ -1123,7 +1134,6 @@
                     </div>
                 </div>
             `;
-            // --- END: BUTTON UI REFINEMENT ---
 
             return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
@@ -1131,11 +1141,7 @@
                              <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
                              <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${shelfOptions}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${sideOptions}</select></div></div>
                          </div>
-                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                             <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
-                             <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="grid grid-cols-4 gap-2">${renderSizeOptions()}</div></div>
-                             <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="grid grid-cols-4 gap-2">${renderWeightOptions(currentSize)}</div></div>
-                         </div>
+                         ${ratDetailsHtml}
                          ${actionButtonsHtml}
                      </form>`;
         }
