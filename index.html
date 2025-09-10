@@ -46,7 +46,6 @@
         let currentWeight = '';
         let godModeEnabled = false;
         let chartInstances = {};
-        let useMarkedLocations = false;
 
 
         const ratSizeOptions = [
@@ -167,9 +166,7 @@
             const ordersCollectionRef = collection(db, `artifacts/${appId}/public/data/orders`);
             onSnapshot(ordersCollectionRef, (snapshot) => {
                 allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (['dashboard', 'order', 'manage'].includes(currentPage)) {
-                    renderApp();
-                }
+                renderApp();
             }, (error) => console.error("Error listening to orders:", error));
         }
         
@@ -225,8 +222,7 @@
                 else if (id.startsWith('nav-')) {
                     currentPage = id.split('-')[1];
                     renderApp();
-                } 
-                else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
+                } else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
                 else if (id === 'clear-crate-btn') { e.preventDefault(); await clearCrate(); }
@@ -241,6 +237,8 @@
                 } else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (target.classList.contains('remove-item-btn')) target.closest('.order-item-row').remove();
                 else if (id === 'save-order-btn') { e.preventDefault(); await saveOrder(); }
+                else if (id === 'save-sheet-url-btn') { saveSheetUrl(); }
+                else if (id === 'sync-sheet-btn') { await syncToGoogleSheets(); }
                 else if (id.startsWith('close-modal-btn')) {
                     const modal = target.closest('.modal');
                     if (modal) {
@@ -256,13 +254,14 @@
                     }
                 } else if (target.classList.contains('delete-order-btn')) { e.preventDefault(); await deleteOrder(target.dataset.orderId); }
                 else if (id === 'calculate-days-btn') { e.preventDefault(); calculateDaysForTarget(); }
+                else if (id === 'search-rats-btn') { e.preventDefault(); searchRatsForTarget(); }
                 else if (target.classList.contains('mark-order-success')) { e.preventDefault(); await markOrderItemStatus(target.dataset.orderId, target.dataset.itemIndex, 'completed'); }
                 else if (target.classList.contains('mark-order-fail')) { e.preventDefault(); openIncompleteModal(target.dataset.orderId, target.dataset.itemIndex); }
                 else if (id === 'send-feedback-btn') { e.preventDefault(); await sendIncompleteFeedback(); }
                 else if (target.classList.contains('mark-message-read')) { e.preventDefault(); await markMessageAsRead(target.dataset.messageId); }
                 else if (target.classList.contains('delete-user-btn')) { e.preventDefault(); await deleteUserAccount(target.dataset.userId); }
             });
-            
+
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
@@ -272,12 +271,16 @@
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
-                    currentWeight = ''; // Reset weight when size changes
-                    updateRatFormUI(); 
+                    updateWeightOptions(currentSize);
+                    renderApp();
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
+                    renderApp();
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
+                } else if(target.id === 'use-marked-toggle') {
+                    useMarkedLocations = target.checked;
+                    handleFilterChange();
                 }
             });
         }
@@ -293,40 +296,42 @@
                 alertMessage("เกิดข้อผิดพลาดในการลบ Order");
             }
         }
-        
+
         async function clearCrate() {
-             if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
-             if (!currentRack || !currentShelf || !currentSide) {
-                 alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
-                 return;
-             }
-             
-             const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
-                 where("rack", "==", currentRack),
-                 where("shelf", "==", currentShelf),
-                 where("side", "==", currentSide));
+            if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
+            if (!currentRack || !currentShelf || !currentSide) {
+                alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
+                return;
+            }
+            
+            const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                where("rack", "==", currentRack),
+                where("shelf", "==", currentShelf),
+                where("side", "==", currentSide));
 
-             try {
-                 const querySnapshot = await getDocs(q);
-                 if (querySnapshot.empty) {
-                     alertMessage("ไม่พบหนูในกระบะนี้");
-                     return;
-                 }
+            try {
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    alertMessage("ไม่พบหนูในกระบะนี้");
+                    return;
+                }
 
-                 const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
-                 await Promise.all(deletePromises);
-                 alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
-                 
-                 currentRack = '';
-                 currentShelf = '';
-                 currentSide = '';
-                 
-                 renderApp();
+                const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
+                await Promise.all(deletePromises);
+                alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
+                
+                // รีเซ็ตค่า State
+                currentRack = '';
+                currentShelf = '';
+                currentSide = '';
+                
+                // สั่งให้วาดหน้าจอใหม่เพื่ออัปเดต UI ทั้งหมด
+                renderApp(); 
 
-             } catch(error) {
-                 console.error("Error clearing crate:", error);
-                 alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
-             }
+            } catch(error) {
+                console.error("Error clearing crate:", error);
+                alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
+            }
         }
 
         async function markMessageAsRead(messageId) {
@@ -992,8 +997,6 @@
             resultDiv.classList.remove('hidden');
         }
         
-        // --- START: BUG FIX (STABILITY) ---
-        // ปรับปรุงฟังก์ชัน renderManagePage และ handleFilterChange
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
@@ -1009,10 +1012,8 @@
                  renderMessagesOnManagePage();
             }
             renderManageOrderSummary();
-            // เรียก renderRatSummary โดยตรงเมื่อหน้าถูกวาดครั้งแรก
             renderRatSummary();
         }
-        // --- END: BUG FIX ---
 
         function renderMessagesOnManagePage() {
             const container = document.getElementById('messages-container');
@@ -1116,7 +1117,7 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-            
+
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
@@ -1140,7 +1141,7 @@
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
                          <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                              <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
-                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('')}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('')}</select></div></div>
+                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${shelfOptions}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${sideOptions}</select></div></div>
                          </div>
                          ${ratDetailsHtml}
                          ${actionButtonsHtml}
@@ -1170,8 +1171,6 @@
             }
         }
         
-        // --- START: BUG FIX ---
-        // ฟังก์ชันนี้จะอัปเดตเฉพาะส่วนของ Summary เท่านั้น เพื่อไม่ให้เกิด Loop
         function handleFilterChange() {
             renderRatSummary();
         }
@@ -1198,7 +1197,6 @@
             renderManageOrderSummary();
             renderRatSummary();
         }
-        // --- END: BUG FIX ---
 
         function renderRatSummary() {
             const summaryContainer = document.getElementById('rat-summary');
