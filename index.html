@@ -996,19 +996,14 @@
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
-
-            const formHtml = renderRatForm();
-            const summaryHtml = `<div id="rat-summary-container" class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div>`;
-            const orderSummaryHtml = `<div id="manage-order-summary-container" class="mt-6"></div>`;
-
             if (['user', 'ceo', 'officer'].includes(currentUserRole)) {
-                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>${orderSummaryHtml}${summaryHtml}</div>`;
+                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div><div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
             } else {
-                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${formHtml}${orderSummaryHtml}${summaryHtml}</div>`;
+                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${renderRatForm()}<div id="manage-order-summary-container" class="mt-6"></div><div class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div></div>`;
                  renderMessagesOnManagePage();
             }
             renderManageOrderSummary();
-            renderRatSummary();
+            handleFilterChange();
         }
 
         function renderMessagesOnManagePage() {
@@ -1111,39 +1106,7 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-
-            const locationHtml = `
-                <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                    <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
-                    <div class="w-full">
-                        <label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label>
-                        <select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg">
-                            <option value="">เลือก Rack</option>
-                            ${rackOptions}
-                        </select>
-                    </div>
-                    ${currentRack ? `
-                        <div class="space-y-3 pt-2">
-                            ${Array.from({ length: 6 }, (_, i) => {
-                                const shelfNum = i + 1;
-                                const leftSelected = currentShelf == shelfNum && currentSide === 'ซ้าย';
-                                const rightSelected = currentShelf == shelfNum && currentSide === 'ขวา';
-                                const leftClasses = leftSelected ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100';
-                                const rightClasses = rightSelected ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100';
-
-                                return `
-                                    <div class="grid grid-cols-3 items-center gap-2">
-                                        <span class="font-semibold text-gray-600 text-center">ชั้นที่ ${shelfNum}</span>
-                                        <button data-shelf="${shelfNum}" data-side="ซ้าย" class="location-button col-span-1 py-2 px-3 border rounded-lg transition-colors ${leftClasses}">กระบะซ้าย</button>
-                                        <button data-shelf="${shelfNum}" data-side="ขวา" class="location-button col-span-1 py-2 px-3 border rounded-lg transition-colors ${rightClasses}">กระบะขวา</button>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    ` : '<p class="text-center text-gray-500 pt-4">กรุณาเลือก Rack เพื่อแสดงชั้น</p>'}
-                </div>
-            `;
-
+                
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
@@ -1165,7 +1128,10 @@
 
             return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
-                         ${locationHtml}
+                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
+                             <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
+                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('')}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('')}</select></div></div>
+                         </div>
                          ${ratDetailsHtml}
                          ${actionButtonsHtml}
                      </form>`;
