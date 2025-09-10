@@ -214,8 +214,6 @@
             }
         }
 
-        // --- START: BUG FIX (INFINITE LOOP) ---
-        // ปรับปรุง Event Listener และเพิ่มฟังก์ชันอัปเดต UI เฉพาะส่วน
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -232,13 +230,6 @@
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
                 else if (id === 'clear-crate-btn') { e.preventDefault(); await clearCrate(); }
-                else if (target.classList.contains('location-button')) {
-                    e.preventDefault();
-                    currentShelf = target.dataset.shelf;
-                    currentSide = target.dataset.side;
-                    // อัปเดตเฉพาะส่วนที่จำเป็น แทนการเรียก renderApp() ทั้งหมด
-                    updateManageUI();
-                }
                 else if (id === 'god-mode-toggle') {
                     godModeEnabled = !godModeEnabled;
                     localStorage.setItem('godModeEnabled', godModeEnabled);
@@ -274,21 +265,18 @@
 
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
-                if (target.id === 'rat-rack') {
-                    const newRackValue = target.value;
-                    if (newRackValue === currentRack) return; // ป้องกันการทำงานซ้ำ
-                    
-                    currentRack = newRackValue;
-                    currentShelf = '';
-                    currentSide = '';
-                    updateManageUI();
+                if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
+                    currentRack = document.getElementById('rat-rack').value;
+                    currentShelf = document.getElementById('rat-shelf').value;
+                    currentSide = document.getElementById('rat-side').value;
+                    handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
                     updateWeightOptions(currentSize);
-                    updateRatFormUI();
+                    renderApp();
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
-                    updateRatFormUI();
+                    renderApp();
                 } else if (target.classList.contains('role-select')) {
                     updateUserRole(target.dataset.userId, target.value);
                 }
@@ -1121,7 +1109,7 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-
+                
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
