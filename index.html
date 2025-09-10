@@ -213,7 +213,7 @@
         }
 
         // --- START: LOCATION UI CHANGE 2 ---
-        // เพิ่ม Event Listener สำหรับปุ่มเลือกตำแหน่งใหม่
+        // ปรับปรุง Event Listener ทั้งหมด
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -226,19 +226,16 @@
                     currentPage = id.split('-')[1];
                     renderApp();
                 } 
-                // --- ส่วนจัดการปุ่มควบคุมหลัก ---
                 else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
                 else if (id === 'clear-crate-btn') { e.preventDefault(); await clearCrate(); }
-                // --- ส่วนจัดการปุ่มเลือกตำแหน่ง ---
                 else if (target.classList.contains('location-button')) {
                     e.preventDefault();
                     currentShelf = target.dataset.shelf;
                     currentSide = target.dataset.side;
-                    handleFilterChange(); // อัปเดต UI ทันที
+                    renderApp(); 
                 }
-                // --- ส่วนอื่นๆ ---
                 else if (id === 'god-mode-toggle') {
                     godModeEnabled = !godModeEnabled;
                     localStorage.setItem('godModeEnabled', godModeEnabled);
@@ -277,8 +274,11 @@
 
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
-                if (target.id === 'rat-rack') { // เหลือแค่ Rack ที่ใช้ change event
+                if (target.id === 'rat-rack') {
                     currentRack = target.value;
+                    // เมื่อเลือก Rack ใหม่ ให้เคลียร์ชั้นและกระบะที่เลือกไว้
+                    currentShelf = '';
+                    currentSide = '';
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
@@ -295,7 +295,6 @@
                 }
             });
         }
-        // --- END: LOCATION UI CHANGE 2 ---
         
         async function deleteOrder(orderId) {
             if (!['admin', 'officer'].includes(currentUserRole)) return;
@@ -1096,7 +1095,6 @@
         }
         
         function renderSizeOptions() {
-            // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Grid จัดการขนาดเอง
             return ratSizeOptions.map(opt => `<div><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="block text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
         }
 
@@ -1105,16 +1103,16 @@
             if (!sizeData) return '';
             const weightOptions = [];
             for (let i = sizeData.minWeight; i <= sizeData.maxWeight; i++) {
-                // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Grid จัดการขนาดเอง
                 weightOptions.push(`<div><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="block text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
             }
             return weightOptions.join('');
         }
         
+        // --- START: LOCATION UI CHANGE 1 ---
+        // ปรับปรุง UI และ Logic ของ renderRatForm
         function renderRatForm() {
             const rackOptions = Array.from({ length: 4 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
-            const shelfOptions = Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('');
-            const sideOptions = ['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('');
+            
             const godModeButton = `
                 <div class="flex items-center justify-center pt-4">
                     <label for="god-mode-toggle" class="mr-3 font-semibold text-gray-700">GOD Mode:</label>
@@ -1123,9 +1121,39 @@
                         <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${godModeEnabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                 </div>`;
-            
-            // --- START: TEXT OVERFLOW FIX ---
-            // ปรับจำนวนคอลัมน์ของ grid สำหรับ size และ weight เป็น 3 คอลัมน์
+
+            const locationHtml = `
+                <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
+                    <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
+                    <div class="w-full">
+                        <label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label>
+                        <select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">เลือก Rack</option>
+                            ${rackOptions}
+                        </select>
+                    </div>
+                    ${currentRack ? `
+                        <div class="space-y-3 pt-2">
+                            ${Array.from({ length: 6 }, (_, i) => {
+                                const shelfNum = i + 1;
+                                const leftSelected = currentShelf == shelfNum && currentSide === 'ซ้าย';
+                                const rightSelected = currentShelf == shelfNum && currentSide === 'ขวา';
+                                const leftClasses = leftSelected ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100';
+                                const rightClasses = rightSelected ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100';
+
+                                return `
+                                    <div class="grid grid-cols-3 items-center gap-2">
+                                        <span class="font-semibold text-gray-600 text-center">ชั้นที่ ${shelfNum}</span>
+                                        <button data-shelf="${shelfNum}" data-side="ซ้าย" class="location-button col-span-1 py-2 px-3 border rounded-lg transition-colors ${leftClasses}">กระบะซ้าย</button>
+                                        <button data-shelf="${shelfNum}" data-side="ขวา" class="location-button col-span-1 py-2 px-3 border rounded-lg transition-colors ${rightClasses}">กระบะขวา</button>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : '<p class="text-center text-gray-500 pt-4">กรุณาเลือก Rack เพื่อแสดงชั้น</p>'}
+                </div>
+            `;
+
             const ratDetailsHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
@@ -1133,7 +1161,6 @@
                     <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="grid grid-cols-3 gap-2">${renderWeightOptions(currentSize)}</div></div>
                 </div>
             `;
-            // --- END: TEXT OVERFLOW FIX ---
 
             const actionButtonsHtml = `
                 <div id="form-buttons" class="pt-4 space-y-4">
@@ -1148,10 +1175,7 @@
 
             return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
-                         <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
-                             <h3 class="text-lg font-medium text-gray-800">ตำแหน่งหนู</h3>
-                             <div class="flex flex-col space-y-4"><div class="w-full"><label for="rat-rack" class="block text-gray-700 font-medium mb-1">RACK</label><select id="rat-rack" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentRack ? 'selected' : ''}>เลือก Rack</option>${rackOptions}</select></div><div class="w-full"><label for="rat-shelf" class="block text-gray-700 font-medium mb-1">ชั้น</label><select id="rat-shelf" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentShelf ? 'selected' : ''}>เลือกชั้น</option>${shelfOptions}</select></div><div class="w-full"><label for="rat-side" class="block text-gray-700 font-medium mb-1">กระบะ</label><select id="rat-side" class="w-full p-2 border border-gray-300 rounded-lg"><option value="" ${!currentSide ? 'selected' : ''}>เลือกกระบะ</option>${sideOptions}</select></div></div>
-                         </div>
+                         ${locationHtml}
                          ${ratDetailsHtml}
                          ${actionButtonsHtml}
                      </form>`;
@@ -1180,28 +1204,45 @@
             }
         }
 
+        // --- START: LOCATION UI CHANGE 3 ---
+        // ปรับปรุง handleFilterChange ให้ใช้ State แทนการอ่านจาก DOM
         function handleFilterChange() {
-            const rackEl = document.getElementById('rat-rack'); const shelfEl = document.getElementById('rat-shelf'); const sideEl = document.getElementById('rat-side');
-            if(!rackEl || !shelfEl || !sideEl) return;
-            let filteredRats = allRats.filter(rat => (!rackEl.value || rat.rack === rackEl.value) && (!shelfEl.value || rat.shelf == shelfEl.value) && (!sideEl.value || rat.side === sideEl.value));
-            renderRatSummary(filteredRats);
+            // เราจะอ่านค่าจาก global state variables โดยตรง
+            let filteredRats = allRats.filter(rat => 
+                (!currentRack || rat.rack === currentRack) && 
+                (!currentShelf || rat.shelf == currentShelf) && 
+                (!currentSide || rat.side === currentSide)
+            );
+            
+            // เนื่องจากเราไม่ได้ render ทั้งหน้าจอ เราจึงต้องเรียก render ส่วนที่เกี่ยวข้องโดยตรง
+            // แต่ในโครงสร้างปัจจุบัน การเรียก renderApp() จะง่ายที่สุด
+            renderApp();
         }
 
         function renderRatSummary(rats) {
             const summaryContainer = document.getElementById('rat-summary');
             if (!summaryContainer) return;
-            if (rats.length === 0) {
+
+            // กรองข้อมูลอีกครั้งตาม state ปัจจุบันก่อนแสดงผล
+            const filteredRats = allRats.filter(rat => 
+                (!currentRack || rat.rack === currentRack) && 
+                (!currentShelf || rat.shelf == currentShelf) && 
+                (!currentSide || rat.side === currentSide)
+            );
+            
+            if (filteredRats.length === 0) {
                 summaryContainer.innerHTML = '<div class="text-center text-gray-500 p-8">ยังไม่มีข้อมูลหนูในส่วนนี้</div>';
                 return;
             }
-            const totalRats = rats.length;
-            const sizeCounts = rats.reduce((counts, rat) => {
+            const totalRats = filteredRats.length;
+            const sizeCounts = filteredRats.reduce((counts, rat) => {
                 counts[rat.size] = (counts[rat.size] || 0) + 1;
                 return counts;
             }, {});
             const sizeDetails = Object.entries(sizeCounts).map(([size, count]) => `<li class="flex justify-between items-center bg-gray-100 p-3 rounded-md"><span class="font-bold text-gray-700">ไซส์ ${size} (ตอนเพิ่ม)</span><span class="text-lg font-semibold text-indigo-600">${count} ตัว</span></li>`).join('');
             summaryContainer.innerHTML = `<div class="space-y-4"><div class="bg-indigo-500 text-white p-6 rounded-lg shadow-md text-center"><p class="text-sm font-medium">จำนวนหนูในกระบะที่เลือก</p><p class="text-4xl font-extrabold mt-1">${totalRats}</p></div><div class="bg-white p-4 rounded-lg shadow-md"><h3 class="text-lg font-medium text-gray-800 mb-2">สรุปจำนวนตามไซส์</h3><ul class="space-y-2">${sizeDetails}</ul></div></div>`;
         }
+        // --- END: LOCATION UI CHANGE 3 ---
 
         function predictRats(targetDate) {
             const predictions = {};
