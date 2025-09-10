@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-      
+        uses: actions/checkout@v4 # <-- แก้ไขบรรทัดนี้ให้ถูกต้อง
+
       - name: Create firebase-config.js
         run: |
           echo "export const firebaseConfig = {" >> js/firebase-config.js
