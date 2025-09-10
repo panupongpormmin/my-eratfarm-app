@@ -297,46 +297,41 @@
                 alertMessage("เกิดข้อผิดพลาดในการลบ Order");
             }
         }
-
-        // --- START: BUG FIX ---
-        // แก้ไขฟังก์ชัน clearCrate
+        
         async function clearCrate() {
-            if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
-            if (!currentRack || !currentShelf || !currentSide) {
-                alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
-                return;
-            }
-            
-            const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
-                where("rack", "==", currentRack),
-                where("shelf", "==", currentShelf),
-                where("side", "==", currentSide));
+             if (!['admin', 'fattening_staff'].includes(currentUserRole)) return;
+             if (!currentRack || !currentShelf || !currentSide) {
+                 alertMessage("โปรดเลือกตำแหน่งกระบะที่ต้องการเคลียร์");
+                 return;
+             }
+             
+             const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                 where("rack", "==", currentRack),
+                 where("shelf", "==", currentShelf),
+                 where("side", "==", currentSide));
 
-            try {
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) {
-                    alertMessage("ไม่พบหนูในกระบะนี้");
-                    return;
-                }
+             try {
+                 const querySnapshot = await getDocs(q);
+                 if (querySnapshot.empty) {
+                     alertMessage("ไม่พบหนูในกระบะนี้");
+                     return;
+                 }
 
-                const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
-                await Promise.all(deletePromises);
-                alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
-                
-                // รีเซ็ตค่า State
-                currentRack = '';
-                currentShelf = '';
-                currentSide = '';
-                
-                // สั่งให้วาดหน้าจอใหม่เพื่ออัปเดต UI ทั้งหมด
-                renderApp(); 
+                 const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, d.id)));
+                 await Promise.all(deletePromises);
+                 alertMessage(`เคลียร์หนูทั้งหมด ${querySnapshot.docs.length} ตัวจากกระบะเรียบร้อยแล้ว!`);
+                 
+                 currentRack = '';
+                 currentShelf = '';
+                 currentSide = '';
+                 
+                 renderApp();
 
-            } catch(error) {
-                console.error("Error clearing crate:", error);
-                alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
-            }
+             } catch(error) {
+                 console.error("Error clearing crate:", error);
+                 alertMessage("เกิดข้อผิดพลาดในการเคลียร์กระบะ");
+             }
         }
-        // --- END: BUG FIX ---
 
         async function markMessageAsRead(messageId) {
             if(!['admin', 'fattening_staff'].includes(currentUserRole)) return;
@@ -693,7 +688,7 @@
             if (!pageContent) return;
 
             const metrics = calculateDashboardMetrics();
-
+            
             pageContent.innerHTML = `
                 <div class="space-y-6 animate-fade-in">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1088,9 +1083,12 @@
             
             pageContent.innerHTML = `<div class="space-y-6"><div class="flex justify-between items-center bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700">รายการ Order ทั้งหมด</h2>${['admin', 'officer'].includes(currentUserRole) ? `<button id="open-add-order-modal" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-blue-700 transition-colors text-base">+ เพิ่ม Order</button>` : ''}</div><div id="orders-list" class="space-y-4">${orderListHtml || '<div class="text-center text-gray-500 p-8">ยังไม่มี Order ในระบบ</div>'}</div></div>`;
         }
-
+        
+        // --- START: UI FIX FOR MOBILE ---
+        // แก้ไขฟังก์ชัน renderSizeOptions และ renderRatForm
         function renderSizeOptions() {
-            return ratSizeOptions.map(opt => `<div class="w-full sm:w-auto"><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="w-full text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
+            // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Flexbox/Grid จัดการขนาดเอง
+            return ratSizeOptions.map(opt => `<div><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked' : ''}><label for="size-${opt.size}" class="block text-center px-4 py-2 bg-white text-gray-700 font-bold rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 hover:bg-gray-100">${opt.size}</label></div>`).join('');
         }
 
         function renderWeightOptions(selectedSize) {
@@ -1098,7 +1096,8 @@
             if (!sizeData) return '';
             const weightOptions = [];
             for (let i = sizeData.minWeight; i <= sizeData.maxWeight; i++) {
-                weightOptions.push(`<div class="w-full sm:w-auto"><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="w-full text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
+                // ลบคลาส w-full sm:w-auto ออกเพื่อให้ Flexbox/Grid จัดการขนาดเอง
+                weightOptions.push(`<div><input type="radio" id="weight-${i}" name="rat-weight" value="${i}" class="hidden peer" ${currentWeight == i ? 'checked' : ''}><label for="weight-${i}" class="block text-center px-4 py-2 bg-white text-gray-700 rounded-lg cursor-pointer border-2 border-gray-300 transition-colors duration-200 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:peer-checked:border-blue-500 hover:bg-gray-100">${i} g.</label></div>`);
             }
             return weightOptions.join('');
         }
@@ -1116,6 +1115,7 @@
                     </button>
                 </div>`;
 
+            // เปลี่ยน container ของปุ่ม size และ weight เป็น grid
             return `<form id="add-rat-form" class="bg-gray-50 p-6 rounded-lg shadow-sm space-y-6"><h2 class="text-xl font-semibold text-gray-700">เพิ่ม / ส่ง / ลบ / เคลียร์</h2>
                          ${(['admin','fattening_staff'].includes(currentUserRole)) ? godModeButton : ''}
                          <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
@@ -1124,12 +1124,13 @@
                          </div>
                          <div class="bg-white p-6 rounded-lg shadow-md space-y-4">
                              <h3 class="text-lg font-medium text-gray-800">รายละเอียดหนู</h3>
-                             <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="flex flex-wrap gap-2">${renderSizeOptions()}</div></div>
-                             <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="flex flex-wrap gap-2">${renderWeightOptions(currentSize)}</div></div>
+                             <div><label class="block text-gray-700 font-medium mb-1">ไซส์</label><div id="rat-size-options" class="grid grid-cols-4 gap-2">${renderSizeOptions()}</div></div>
+                             <div id="weight-group" class="${currentSize ? '' : 'hidden'}"><label class="block text-gray-700 font-medium mt-4 mb-1">น้ำหนัก (g.)</label><div id="rat-weight-options" class="grid grid-cols-4 gap-2">${renderWeightOptions(currentSize)}</div></div>
                          </div>
                          <div id="form-buttons" class="pt-4 grid grid-cols-2 gap-4"><button id="save-rat-btn" class="w-full bg-indigo-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-colors duration-200">+ เพิ่ม</button><button id="send-order-btn" class="w-full bg-green-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-green-700 transition-colors duration-200">ส่ง</button><button id="delete-rat-btn" class="w-full bg-red-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-red-700 transition-colors duration-200">- ลบ</button><button id="clear-crate-btn" class="w-full bg-amber-600 text-white px-4 py-3 rounded-full font-bold shadow-lg hover:bg-amber-700 transition-colors duration-200">เคลียร์</button></div>
                      </form>`;
         }
+        // --- END: UI FIX FOR MOBILE ---
 
         function renderManageOrderSummary() {
             const container = document.getElementById('manage-order-summary-container');
