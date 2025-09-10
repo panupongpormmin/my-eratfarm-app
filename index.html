@@ -78,7 +78,7 @@
                             godModeEnabled = localStorage.getItem('godModeEnabled') === 'true';
                             await checkUserRole(user);
                             isAuthReady = true;
-                            listenToRats(); // This will trigger the first render
+                            listenToRats();
                             listenToOrders();
                             if (['admin', 'fattening_staff'].includes(currentUserRole)) {
                                 listenToMessages();
@@ -214,8 +214,6 @@
             }
         }
 
-        // --- START: BUG FIX (STABILITY) ---
-        // ปรับปรุง Event Listener และเพิ่มฟังก์ชันอัปเดต UI เฉพาะส่วน
         function setupEventListeners() {
             document.body.addEventListener('click', async (e) => {
                 const target = e.target.closest('button');
@@ -264,7 +262,7 @@
                 else if (target.classList.contains('mark-message-read')) { e.preventDefault(); await markMessageAsRead(target.dataset.messageId); }
                 else if (target.classList.contains('delete-user-btn')) { e.preventDefault(); await deleteUserAccount(target.dataset.userId); }
             });
-
+            
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
                 if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
@@ -274,7 +272,7 @@
                     handleFilterChange();
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value;
-                    currentWeight = '';
+                    currentWeight = ''; // Reset weight when size changes
                     updateRatFormUI(); 
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
@@ -994,7 +992,7 @@
             resultDiv.classList.remove('hidden');
         }
         
-        // --- START: BUG FIX ---
+        // --- START: BUG FIX (STABILITY) ---
         // ปรับปรุงฟังก์ชัน renderManagePage และ handleFilterChange
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
@@ -1011,6 +1009,7 @@
                  renderMessagesOnManagePage();
             }
             renderManageOrderSummary();
+            // เรียก renderRatSummary โดยตรงเมื่อหน้าถูกวาดครั้งแรก
             renderRatSummary();
         }
         // --- END: BUG FIX ---
@@ -1106,6 +1105,8 @@
         
         function renderRatForm() {
             const rackOptions = Array.from({ length: 4 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
+            const shelfOptions = Array.from({ length: 6 }, (_, i) => `<option value="${i + 1}" ${currentShelf == i+1 ? 'selected' : ''}>ชั้น ${i + 1}</option>`).join('');
+            const sideOptions = ['ซ้าย', 'ขวา'].map(side => `<option value="${side}" ${currentSide === side ? 'selected' : ''}>${side}</option>`).join('');
             
             const godModeButton = `
                 <div class="flex items-center justify-center pt-4">
