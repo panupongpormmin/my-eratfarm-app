@@ -612,7 +612,7 @@
                 const orderToUpdate = allOrders.find(o => o.id === targetItem.orderId);
                 const updatedItems = [...orderToUpdate.items];
                 updatedItems[targetItem.itemIndex].sent += 1;
-                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetItem.orderId), { items: updatedItems });
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetItem.itemId), { items: updatedItems });
                 alertMessage(`ส่งหนู 1 ตัวเข้า Order '${orderToUpdate.name}' เรียบร้อย!`);
             } catch(error) {
                 console.error("Error fulfilling from manage:", error);
@@ -772,6 +772,9 @@
             
             const growthCtx = document.getElementById('growth-chart');
             if (growthCtx) {
+                if (chartInstances['growth-chart']) {
+                    chartInstances['growth-chart'].destroy();
+                }
                 chartInstances['growth-chart'] = new Chart(growthCtx, {
                     type: 'line',
                     data: {
