@@ -46,7 +46,7 @@
         let currentUser = null, currentUserRole = null;
         let allRats = [], allOrders = [], allUsers = [];
         let currentPage = 'main';
-        let subPage = 'crate'; // Default subpage for manage
+        let subPage = '';
         let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
         let chartInstances = {};
         let unsubscribeListeners = [];
@@ -119,7 +119,7 @@
             currentUser = null; currentUserRole = null;
             allRats = []; allOrders = []; allUsers = [];
             currentPage = 'main';
-            subPage = 'crate';
+            subPage = '';
             currentRack = ''; currentShelf = ''; currentSide = ''; currentSize = ''; currentWeight = '';
         }
 
@@ -318,13 +318,18 @@
                 if (id === 'google-signin-btn') signInWithGoogle();
                 else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
-                    currentPage = idParts[1]; subPage = ''; renderPageContent();
+                    currentPage = idParts[1];
+                    subPage = (currentPage === 'department') ? 'fattening' : ''; // Default subpage
+                    renderPageContent();
                 } else if (id.startsWith('sub-nav-')) {
                     const page = idParts[2];
                     const newSubPage = idParts[3];
-                    if(page === 'manage') {
+                    if (page === 'department') {
                         subPage = newSubPage;
-                        renderManagePage();
+                        renderDepartmentPage();
+                    } else if (page === 'fattening') {
+                        subPage = newSubPage; // 'crate' or 'order'
+                        renderFatteningContent();
                     } else if(page === 'order') {
                         subPage = newSubPage;
                         renderOrderPage();
@@ -348,12 +353,12 @@
                     currentRack = document.getElementById('rat-rack')?.value || '';
                     currentShelf = document.getElementById('rat-shelf')?.value || '';
                     currentSide = document.getElementById('rat-side')?.value || '';
-                    if (currentPage === 'manage') {
+                    if (currentPage === 'department' && subPage === 'fattening') {
                          renderCrateSummary();
                     }
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value; currentWeight = '';
-                    if (currentPage === 'manage') document.getElementById('rat-form-container').innerHTML = renderRatForm();
+                    if (currentPage === 'department' && subPage === 'fattening') document.getElementById('rat-form-container').innerHTML = renderRatForm();
                 } else if (target.name === 'rat-weight') {
                     currentWeight = target.value;
                 } else if (target.classList.contains('role-select')) {
@@ -366,7 +371,7 @@
         function updateDataDrivenUI() {
             const pageRenderers = {
                 'dashboard': renderDashboardPage, 'main': renderMainPage,
-                'manage': renderManagePage, 'order': renderOrderPage, 'admin': renderAdminPage
+                'department': renderDepartmentPage, 'order': renderOrderPage, 'admin': renderAdminPage
             };
             if (pageRenderers[currentPage]) {
                 pageRenderers[currentPage]();
@@ -421,7 +426,7 @@
              const navButtons = [
                 { id: 'dashboard', label: 'Dashboard', roles: ['admin', 'ceo'] },
                 { id: 'main', label: 'หน้าหลัก', roles: ['admin', 'ceo', 'officer', 'fattening_staff', 'user'] },
-                { id: 'manage', label: 'แผนกขุน', roles: ['admin', 'fattening_staff'] },
+                { id: 'department', label: 'แผนก', roles: ['admin', 'fattening_staff'] },
                 { id: 'order', label: 'Order', roles: ['admin', 'officer'] },
                 { id: 'admin', label: 'Admin', roles: ['admin'] }
              ];
@@ -470,75 +475,75 @@
             createDoughnutChart('fulfillment-chart', ['ส่งแล้ว', 'ยังไม่ส่ง'], [metrics.totalItemsSent, metrics.totalPendingItems]);
         }
         
-        function renderManagePage() {
+        function renderDepartmentPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
             const subNav = `<div class="flex space-x-2 mb-6 justify-center">
-                <button id="sub-nav-manage-crate" class="px-4 py-2 rounded-full font-semibold ${subPage === 'crate' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการกระบะ</button>
-                <button id="sub-nav-manage-order" class="px-4 py-2 rounded-full font-semibold ${subPage === 'order' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการ Order</button>
+                <button id="sub-nav-department-fattening" class="px-4 py-2 rounded-full font-semibold ${subPage === 'fattening' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">แผนกขุน</button>
+                <button id="sub-nav-department-breeding" class="px-4 py-2 rounded-full font-semibold ${subPage === 'breeding' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">แผนกพ่อแม่พันธุ์</button>
             </div>`;
             pageContent.innerHTML = `<div class="animate-fade-in">${subNav}<div id="sub-page-content"></div></div>`;
             
-            if (subPage === 'order') {
-                renderOrderFulfillmentPage();
+            if (subPage === 'breeding') {
+                renderBreedingDeptPage();
             } else {
-                subPage = 'crate'; // Default to crate view
-                renderCrateManagementPage();
+                subPage = 'fattening'; // Default
+                renderFatteningContent();
+            }
+        }
+        
+        function renderFatteningContent() {
+            const container = document.getElementById('sub-page-content');
+            if (!container) return;
+            // Note: This sub-page has its own state, which is not ideal, but works for this structure.
+            // A better solution would involve a more robust state management.
+            let fatteningSubPage = 'crate'; // Local state for this render
+            
+            const fatteningSubNav = `<div class="flex space-x-2 mb-6 justify-center border-b pb-4">
+                 <button class="fattening-sub-nav-btn text-sm px-3 py-1 rounded-full font-semibold bg-blue-200 text-blue-800" data-page="crate">จัดการกระบะ</button>
+                 <button class="fattening-sub-nav-btn text-sm px-3 py-1 rounded-full font-semibold bg-gray-100" data-page="order">จัดการ Order</button>
+            </div>`;
+            container.innerHTML = `${fatteningSubNav}<div id="fattening-content-container"></div>`;
+            
+            // Local event listener for these buttons
+            container.querySelectorAll('.fattening-sub-nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.fattening-sub-nav-btn').forEach(b => b.classList.replace('bg-blue-200','bg-gray-100'));
+                    btn.classList.replace('bg-gray-100','bg-blue-200');
+                    fatteningSubPage = btn.dataset.page;
+                    renderFatteningSubContent(fatteningSubPage);
+                });
+            });
+            
+            renderFatteningSubContent(fatteningSubPage);
+        }
+        
+        function renderFatteningSubContent(page) {
+             const container = document.getElementById('fattening-content-container');
+             if(!container) return;
+             if (page === 'order') {
+                container.innerHTML = `Order Fulfillment Content`;
+            } else {
+                container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div id="rat-form-container"></div>
+                    <div id="crate-summary-container"></div>
+                </div>`;
+                document.getElementById('rat-form-container').innerHTML = renderRatForm('crate');
+                renderCrateSummary();
             }
         }
 
-        function renderCrateManagementPage() {
+        function renderBreedingDeptPage() {
             const subPageContent = document.getElementById('sub-page-content');
-            if (!subPageContent) return;
-            subPageContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div id="rat-form-container">${renderRatForm()}</div>
-                <div id="crate-summary-container"></div>
-            </div>`;
-            renderCrateSummary();
-        }
-
-        function renderOrderFulfillmentPage() {
-            const subPageContent = document.getElementById('sub-page-content');
-            if (!subPageContent) return;
-            
-            subPageContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div id="rat-form-container">${renderRatForm()}</div>
-                <div class="space-y-6">
-                    <div id="crate-summary-container"></div>
-                    <div id="active-orders-summary-container"></div>
-                </div>
-            </div>`;
-            renderCrateSummary();
-            renderActiveOrdersSummary();
-        }
-        
-        function renderActiveOrdersSummary() {
-            const container = document.getElementById('active-orders-summary-container');
-            if (!container) return;
-            
-            const activeOrders = allOrders.filter(o => o.items && o.items.some(i => i.status === 'pending'));
-            const activeOrdersHtml = activeOrders.length > 0 ? activeOrders.map(order => {
-                const itemsHtml = (order.items || [])
-                    .filter(item => item.status === 'pending')
-                    .map(item => `<div class="text-sm flex justify-between"><span>- ไซส์ ${item.size}</span> <span>${item.sent || 0}/${item.quantity}</span></div>`)
-                    .join('');
-                return `<div class="bg-white p-3 rounded-lg shadow-sm">
-                    <p class="font-bold truncate">${order.name}</p>
-                    <div class="mt-1 space-y-1">${itemsHtml}</div>
-                </div>`;
-            }).join('') : '<p class="text-center text-gray-500">ไม่มี Order ที่ต้องจัดส่ง</p>';
-            
-            container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg">
-                 <h2 class="text-xl font-bold mb-4">Order ที่ต้องจัดส่ง</h2>
-                 <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                    ${activeOrdersHtml}
-                 </div>
+            if(!subPageContent) return;
+             subPageContent.innerHTML = `<div class="p-4 bg-gray-50 rounded-lg">
+                <h2 class="text-xl font-bold">แผนกพ่อแม่พันธุ์</h2>
+                <p class="mt-2 text-gray-600">หน้านี้สำหรับจัดการ Order ของแผนกพ่อแม่พันธุ์</p>
             </div>`;
         }
-
 
         function renderOrderPage() {
-            const pageContent = document.getElementById('page-content');
+             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
 
              const subNav = `<div class="flex space-x-2 mb-6 justify-center">
@@ -553,7 +558,6 @@
                 renderFatteningOrderPage();
             }
         }
-
         function renderFatteningOrderPage() {
             const subPageContent = document.getElementById('sub-page-content');
             if(!subPageContent) return;
@@ -603,14 +607,7 @@
             </div>`;
         }
         
-        function renderBreedingDeptPage() {
-            const subPageContent = document.getElementById('sub-page-content');
-            if(!subPageContent) return;
-             subPageContent.innerHTML = `<div class="p-4 bg-gray-50 rounded-lg">
-                <h2 class="text-xl font-bold">Order (แผนกพ่อแม่พันธุ์)</h2>
-                <p class="mt-2 text-gray-600">หน้านี้สำหรับจัดการ Order ของแผนกพ่อแม่พันธุ์</p>
-            </div>`;
-        }
+        
 
 
         function renderAdminPage() {
@@ -635,7 +632,7 @@
         }
 
         // --- UI Components ---
-        function renderRatForm() {
+        function renderRatForm(pageContext) {
             const rackOptions = [...Array(6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
             const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
             const sideOptions = ['ซ้าย', 'ขวา'].map(s => `<option value="${s}" ${currentSide === s ? 'selected':''}>${s}</option>`).join('');
@@ -650,9 +647,9 @@
             };
 
             let actionButtonHtml = '';
-            if (subPage === 'crate') {
+            if (pageContext === 'crate') {
                 actionButtonHtml = `<button id="save-rat-btn" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition" type="button">+ เพิ่มหนู</button>`;
-            } else if (subPage === 'order') {
+            } else if (pageContext === 'order') {
                 actionButtonHtml = `<div class="space-y-2 pt-2">
                     <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
                     <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
