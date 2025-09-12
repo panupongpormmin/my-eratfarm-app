@@ -160,6 +160,51 @@
                 await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData);
             } catch(e) { console.error(e); } finally { button.disabled = false; }
         }
+        
+        async function returnRatToCrate(button) {
+            if (!currentRack || !currentShelf || !currentSide || !currentWeight) {
+                return alert("กรุณาเลือกตำแหน่งและกรอกน้ำหนักหนูที่จะส่งคืน");
+            }
+            button.disabled = true;
+            try {
+                const q = query(collection(db, `artifacts/${appId}/public/data/rats`), 
+                    where("rack", "==", currentRack), 
+                    where("shelf", "==", currentShelf), 
+                    where("side", "==", currentSide)
+                );
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    alert("ไม่พบหนูในกระบะที่เลือก");
+                    return;
+                }
+
+                const now = new Date();
+                const weightToUpdate = parseFloat(currentWeight);
+                const candidates = querySnapshot.docs.map(doc => {
+                    const rat = { id: doc.id, ...doc.data() };
+                    const daysAgo = (now - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
+                    const estimatedWeight = rat.weight + (daysAgo * 0.9); // Growth rate 0.9g/day
+                    return { ...rat, estimatedWeight };
+                });
+
+                let closestRat = candidates.reduce((prev, curr) => 
+                    (Math.abs(curr.estimatedWeight - weightToUpdate) < Math.abs(prev.estimatedWeight - weightToUpdate) ? curr : prev)
+                );
+                
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id), {
+                    weight: weightToUpdate,
+                    createdAt: new Date().toISOString() // Reset the 'age' of the rat
+                });
+
+                alert(`อัปเดตน้ำหนักหนู (น้ำหนักประมาณ ${closestRat.estimatedWeight.toFixed(1)}g) เป็น ${weightToUpdate}g เรียบร้อยแล้ว`);
+
+            } catch (e) {
+                console.error("Error returning rat to crate:", e);
+                alert("เกิดข้อผิดพลาดในการอัปเดตข้อมูลหนู");
+            } finally {
+                button.disabled = false;
+            }
+        }
 
         async function saveOrder(button) {
              button.disabled = true;
@@ -274,7 +319,6 @@
                 else if (id.startsWith('nav-')) {
                     currentPage = idParts[1]; subPage = ''; renderPageContent();
                 } else if (id.startsWith('sub-nav-')) {
-                    // Correctly handle sub-page navigation
                     const page = idParts[2];
                     const newSubPage = idParts[3];
                     if(page === 'manage') {
@@ -287,6 +331,7 @@
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
                 else if (id === 'send-rat-btn') sendRatToOrder(button);
+                else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-add-order-modal') document.getElementById('add-order-modal').classList.remove('hidden');
                 else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (button.classList.contains('remove-item-btn')) button.closest('.order-item-row').remove();
@@ -449,6 +494,21 @@
             const subPageContent = document.getElementById('sub-page-content');
             if (!subPageContent) return;
             
+            subPageContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="rat-form-container">${renderRatForm()}</div>
+                <div class="space-y-6">
+                    <div id="crate-summary-container"></div>
+                    <div id="active-orders-summary-container"></div>
+                </div>
+            </div>`;
+            renderCrateSummary();
+            renderActiveOrdersSummary();
+        }
+        
+        function renderActiveOrdersSummary() {
+            const container = document.getElementById('active-orders-summary-container');
+            if (!container) return;
+            
             const activeOrders = allOrders.filter(o => o.items && o.items.some(i => i.status === 'pending'));
             const activeOrdersHtml = activeOrders.length > 0 ? activeOrders.map(order => {
                 const itemsHtml = (order.items || [])
@@ -460,17 +520,15 @@
                     <div class="mt-1 space-y-1">${itemsHtml}</div>
                 </div>`;
             }).join('') : '<p class="text-center text-gray-500">ไม่มี Order ที่ต้องจัดส่ง</p>';
-
-            subPageContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div id="rat-form-container">${renderRatForm()}</div>
-                <div class="bg-gray-50 p-4 rounded-lg">
-                     <h2 class="text-xl font-bold mb-4">Order ที่ต้องจัดส่ง</h2>
-                     <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                        ${activeOrdersHtml}
-                     </div>
-                </div>
+            
+            container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg">
+                 <h2 class="text-xl font-bold mb-4">Order ที่ต้องจัดส่ง</h2>
+                 <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                    ${activeOrdersHtml}
+                 </div>
             </div>`;
         }
+
 
         function renderOrderPage() {
             const pageContent = document.getElementById('page-content');
@@ -588,7 +646,10 @@
             if (subPage === 'crate' || !subPage) {
                 actionButtonHtml = `<button id="save-rat-btn" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition" type="button">+ เพิ่มหนู</button>`;
             } else if (subPage === 'order') {
-                actionButtonHtml = `<button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>`;
+                actionButtonHtml = `<div class="space-y-2 pt-2">
+                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
+                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
+                </div>`;
             }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
