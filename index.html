@@ -294,25 +294,67 @@
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/user_roles`, userId), { role: newRole });
              } catch(e) { console.error(e); }
         }
-
-        async function sendQuickRatToOrder(orderId, itemIndex) {
-            const order = allOrders.find(o => o.id === orderId);
-            if (!order) return;
-
-            const updatedItems = [...order.items];
-            const item = updatedItems[itemIndex];
-
-            if (item.status !== 'pending') {
-                return alert("Order รายการนี้ถูกปิดไปแล้ว");
+        
+        async function sendRatToOrder(button) {
+            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) {
+                return alert("กรุณากรอกข้อมูลหนูที่จะส่งให้ครบถ้วน");
             }
 
-            item.sent = (item.sent || 0) + 1;
+            let targetOrder = null;
+            let targetItemIndex = -1;
+
+            const sortedOrders = [...allOrders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            for (const order of sortedOrders) {
+                const index = (order.items || []).findIndex(item =>
+                    item.size === currentSize && item.status === 'pending'
+                );
+                if (index !== -1) {
+                    targetOrder = order;
+                    targetItemIndex = index;
+                    break;
+                }
+            }
+
+            if (!targetOrder) {
+                return alert(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ถูกปิดไปแล้ว`);
+            }
+
+            button.disabled = true;
 
             try {
-                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
+                const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                    where("rack", "==", currentRack),
+                    where("shelf", "==", currentShelf),
+                    where("side", "==", currentSide)
+                );
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    alert("ไม่พบหนูในกระบะที่เลือก");
+                    return;
+                }
+
+                const now = new Date();
+                const weightToFind = parseFloat(currentWeight);
+                const candidates = querySnapshot.docs.map(doc => {
+                    const rat = { id: doc.id, ...doc.data() };
+                    const daysAgo = (now - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
+                    const estimatedWeight = rat.weight + (daysAgo * 0.9);
+                    return { ...rat, estimatedWeight };
+                });
+                let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
+
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
+
+                const updatedItems = [...targetOrder.items];
+                updatedItems[targetItemIndex].sent = (updatedItems[targetItemIndex].sent || 0) + 1;
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetOrder.id), { items: updatedItems });
+
+                alert(`ส่งหนู (น้ำหนักประมาณ ${closestRat.estimatedWeight.toFixed(1)}g) เข้า Order '${targetOrder.name}' เรียบร้อย`);
             } catch (e) {
-                console.error("Error sending quick rat:", e);
-                alert("เกิดข้อผิดพลาดในการส่งหนู");
+                console.error("Error sending rat to order:", e);
+                alert("เกิดข้อผิดพลาดในการส่ง Order");
+            } finally {
+                button.disabled = false;
             }
         }
         
@@ -355,7 +397,7 @@
                 else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
                     currentPage = idParts[1];
-                    subPage = (currentPage === 'department') ? 'fattening' : ''; // Default subpage for department
+                    subPage = (currentPage === 'department') ? 'fattening' : '';
                     renderPageContent();
                 } else if (id.startsWith('sub-nav-')) {
                     const page = idParts[2];
@@ -369,9 +411,7 @@
                     }
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
-                else if (button.classList.contains('send-rat-quick-btn')) {
-                    sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
-                }
+                else if (id === 'send-rat-btn') sendRatToOrder(button);
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
@@ -554,10 +594,14 @@
              const container = document.getElementById('fattening-content-container');
              if(!container) return;
              if (fatteningSubPage === 'order') {
-                container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg">
-                    <h2 class="text-xl font-bold mb-4">Order ที่ต้องจัดส่ง</h2>
-                    <div id="active-orders-summary-container" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2"></div>
+                container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div id="rat-form-container">${renderRatForm()}</div>
+                    <div class="space-y-6">
+                        <div id="crate-summary-container"></div>
+                        <div id="active-orders-summary-container"></div>
+                    </div>
                 </div>`;
+                renderCrateSummary();
                 renderActiveOrdersSummary();
             } else {
                 container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -630,35 +674,30 @@
             const container = document.getElementById('active-orders-summary-container');
             if (!container) return;
             
-            let allActiveItems = [];
-            allOrders.forEach(order => {
-                (order.items || []).forEach((item, index) => {
-                    if (item.status === 'pending') {
-                        allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index });
-                    }
-                });
-            });
-
-            if (allActiveItems.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500">ไม่มี Order ที่ต้องจัดส่ง</p>';
+            const activeOrders = allOrders.filter(o => o.items && o.items.some(i => i.status === 'pending'));
+            if (activeOrders.length === 0) {
+                 container.innerHTML = '<p class="text-center text-gray-500">ไม่มี Order ที่ต้องจัดส่ง</p>';
                 return;
             }
-
-            const itemsHtml = allActiveItems.map(item => `
-                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
-                    <div>
-                        <p class="font-semibold">ไซส์ ${item.size}</p>
-                        <p class="text-sm text-gray-500">${item.orderName}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-bold text-lg">${item.sent || 0} / ${item.quantity}</p>
-                    </div>
-                    <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
-                </div>
-            `).join('');
+            const activeOrdersHtml = activeOrders.map(order => {
+                const itemsHtml = (order.items || [])
+                    .filter(item => item.status === 'pending')
+                    .map(item => `<div class="text-sm flex justify-between"><span>- ไซส์ ${item.size}</span> <span>${item.sent || 0}/${item.quantity}</span></div>`)
+                    .join('');
+                return `<div class="bg-white p-3 rounded-lg shadow-sm">
+                    <p class="font-bold truncate">${order.name}</p>
+                    <div class="mt-1 space-y-1">${itemsHtml}</div>
+                </div>`;
+            }).join('');
             
-            container.innerHTML = itemsHtml;
+            container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg">
+                 <h2 class="text-xl font-bold mb-4">Order ที่ต้องจัดส่ง</h2>
+                 <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                    ${activeOrdersHtml}
+                 </div>
+            </div>`;
         }
+
 
         function renderAdminPage() {
             const pageContent = document.getElementById('page-content');
@@ -702,8 +741,12 @@
                     <button id="save-rat-btn" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition" type="button">+ เพิ่มหนู</button>
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
                 </div>`;
-            } 
-            // The form is no longer used for sending orders directly, so we remove that button logic.
+            } else if (fatteningSubPage === 'order') {
+                actionButtonHtml = `<div class="space-y-2 pt-2">
+                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
+                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
+                </div>`;
+            }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
                 <h2 class="text-xl font-bold">จัดการหนู</h2>
