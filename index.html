@@ -694,7 +694,7 @@
                      <div class="flex space-x-2 mb-6 justify-center flex-wrap gap-2">
                          ${(['admin', 'ceo'].includes(currentUserRole)) ? `<button id="nav-dashboard" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'dashboard' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">Dashboard</button>`:''}
                          <button id="nav-main" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'main' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">หน้าหลัก</button>
-                         <button id="nav-manage" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'manage' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">จัดการ</button>
+                         <button id="nav-manage" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'manage' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">แผนกขุน</button>
                          <button id="nav-order" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'order' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">Order</button>
                          ${currentUserRole === 'admin' ? `<button id="nav-admin" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${currentPage === 'admin' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">Admin</button>` : ''}
                      </div>
