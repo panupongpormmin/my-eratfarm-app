@@ -210,13 +210,17 @@
                 const button = e.target.closest('button');
                 if (!button) return;
                 const id = button.id || '';
+                const idParts = id.split('-');
 
                 if (id === 'google-signin-btn') signInWithGoogle();
                 else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
-                    currentPage = id.split('-')[1]; subPage = ''; renderPageContent();
+                    currentPage = idParts[1]; subPage = ''; renderPageContent();
                 } else if (id.startsWith('sub-nav-')) {
-                    subPage = id.split('-')[2]; renderManagePage();
+                    currentPage = idParts[2];
+                    subPage = idParts[3];
+                    if(currentPage === 'manage') renderManagePage();
+                    else if(currentPage === 'order') renderOrderPage();
                 } else if (id === 'save-rat-btn') saveRat(button);
                 else if (id === 'open-add-order-modal') document.getElementById('add-order-modal').classList.remove('hidden');
                 else if (id === 'add-order-item-btn') addNewOrderItemRow();
@@ -321,7 +325,7 @@
                     <h1 class="text-2xl font-bold text-gray-800">ภาพรวมฟาร์ม</h1>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div class="bg-blue-100 p-4 rounded-lg"><p class="text-blue-800">จำนวนหนูทั้งหมด</p><p class="text-3xl font-bold text-blue-900">${allRats.length} ตัว</p></div>
-                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-green-800">ออเดอร์ที่ใช้งาน</p><p class="text-3xl font-bold text-green-900">${allOrders.filter(o => o.items && o.items.some(i => i.sent < i.quantity)).length} รายการ</p></div>
+                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-green-800">ออเดอร์ที่ใช้งาน</p><p class="text-3xl font-bold text-green-900">${allOrders.filter(o => o.items && o.items.some(i => (i.sent || 0) < i.quantity)).length} รายการ</p></div>
                     </div>
                 </div>
             </div>`;
@@ -352,10 +356,16 @@
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
             const subNav = `<div class="flex space-x-2 mb-6 justify-center">
-                <button id="sub-nav-crate" class="px-4 py-2 rounded-full font-semibold ${!subPage || subPage === 'crate' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการกระบะ</button>
+                <button id="sub-nav-manage-crate" class="px-4 py-2 rounded-full font-semibold ${!subPage || subPage === 'crate' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการกระบะ</button>
+                <button id="sub-nav-manage-order" class="px-4 py-2 rounded-full font-semibold ${subPage === 'order' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการ Order</button>
             </div>`;
             pageContent.innerHTML = `<div class="animate-fade-in">${subNav}<div id="sub-page-content"></div></div>`;
-            renderCrateManagementPage();
+            
+            if (subPage === 'order') {
+                renderOrderFulfillmentPage();
+            } else {
+                renderCrateManagementPage();
+            }
         }
 
         function renderCrateManagementPage() {
@@ -368,9 +378,36 @@
             renderCrateSummary();
         }
 
+        function renderOrderFulfillmentPage() {
+            const subPageContent = document.getElementById('sub-page-content');
+            if (!subPageContent) return;
+            subPageContent.innerHTML = `<div class="p-4 bg-gray-50 rounded-lg">
+                <h2 class="text-xl font-bold">จัดการ Order (แผนกขุน)</h2>
+                <p class="mt-2 text-gray-600">หน้านี้สำหรับดู Order ที่ต้องจัดส่ง</p>
+            </div>`;
+        }
+
         function renderOrderPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
+
+             const subNav = `<div class="flex space-x-2 mb-6 justify-center">
+                <button id="sub-nav-order-fattening" class="px-4 py-2 rounded-full font-semibold ${!subPage || subPage === 'fattening' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">แผนกขุน</button>
+                <button id="sub-nav-order-breeding" class="px-4 py-2 rounded-full font-semibold ${subPage === 'breeding' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">แผนกพ่อแม่พันธุ์</button>
+            </div>`;
+            pageContent.innerHTML = `<div class="animate-fade-in">${subNav}<div id="sub-page-content"></div></div>`;
+
+            if (subPage === 'breeding') {
+                renderBreedingDeptPage();
+            } else {
+                renderFatteningOrderPage();
+            }
+        }
+
+        function renderFatteningOrderPage() {
+            const subPageContent = document.getElementById('sub-page-content');
+            if(!subPageContent) return;
+            
             const sortedOrders = [...allOrders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
             const orderListHtml = sortedOrders.map(order => {
                 const itemsHtml = (order.items || []).map(item => {
@@ -387,14 +424,24 @@
                 </div>`;
             }).join('') || '<p class="text-center text-gray-500">ยังไม่มี Order</p>';
             
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
+            subPageContent.innerHTML = `<div class="space-y-6">
                 <div class="flex justify-between items-center">
-                    <h1 class="text-2xl font-bold">รายการ Order</h1>
+                    <h1 class="text-2xl font-bold">รายการ Order (แผนกขุน)</h1>
                     ${currentUserRole === 'admin' ? '<button id="open-add-order-modal" class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-600">+ เพิ่ม Order</button>' : ''}
                 </div>
                 <div class="space-y-4">${orderListHtml}</div>
             </div>`;
         }
+        
+        function renderBreedingDeptPage() {
+            const subPageContent = document.getElementById('sub-page-content');
+            if(!subPageContent) return;
+             subPageContent.innerHTML = `<div class="p-4 bg-gray-50 rounded-lg">
+                <h2 class="text-xl font-bold">Order (แผนกพ่อแม่พันธุ์)</h2>
+                <p class="mt-2 text-gray-600">หน้านี้สำหรับจัดการ Order ของแผนกพ่อแม่พันธุ์</p>
+            </div>`;
+        }
+
 
         function renderAdminPage() {
             const pageContent = document.getElementById('page-content');
