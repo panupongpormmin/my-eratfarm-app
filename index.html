@@ -39,6 +39,7 @@
         let allRats = [];
         let allOrders = [];
         let currentPage = 'main';
+        let subPage = ''; // ตัวแปรสำหรับหน้าย่อย
         let currentRack = '';
         let currentShelf = '';
         let currentSide = '';
@@ -201,12 +202,20 @@
         function updateRatUI() {
             if (currentPage === 'dashboard') renderDashboardPage();
             else if (currentPage === 'main') renderMainPage();
-            else if (currentPage === 'manage') renderRatSummary();
+            else if (currentPage === 'manage') {
+                 if (subPage === 'crate-management') {
+                    renderCrateManagementPage();
+                 }
+            }
         }
 
         function updateOrderUI() {
             if (currentPage === 'dashboard') renderDashboardPage();
-            else if (currentPage === 'manage') renderManageOrderSummary();
+            else if (currentPage === 'manage') {
+                if (subPage === 'order-fulfillment') {
+                    renderOrderFulfillmentPage();
+                }
+            }
             else if (currentPage === 'order') renderOrderPage();
         }
 
@@ -244,8 +253,12 @@
                 else if (id === 'signout-btn') await signOutUser();
                 else if (id.startsWith('nav-')) {
                     currentPage = id.split('-')[1];
+                    subPage = '';
                     renderApp();
-                } 
+                } else if (id.startsWith('sub-nav-')) {
+                    subPage = id.split('-')[2];
+                    renderManagePage();
+                }
                 else if (id === 'save-rat-btn') { e.preventDefault(); await saveRat(); }
                 else if (id === 'send-order-btn') { e.preventDefault(); await sendOrderFromManage(); }
                 else if (id === 'delete-rat-btn') { e.preventDefault(); await deleteRat(); }
@@ -494,7 +507,7 @@
                 if (currDiff < prevDiff) return curr;
                 if (currDiff === prevDiff && curr.createdAt < prev.createdAt) return curr;
                 return prev;
-            });
+            }, candidates[0]);
             
             if (!closestRat) return alertMessage("ไม่พบหนูที่มีน้ำหนักใกล้เคียงในกระบะ");
 
@@ -603,7 +616,7 @@
                 if (currDiff < prevDiff) return curr;
                 if (currDiff === prevDiff && curr.createdAt < prev.createdAt) return curr;
                 return prev;
-            });
+            }, candidates[0]);
 
             if (!closestRat) return alertMessage("ไม่พบหนูที่มีน้ำหนักใกล้เคียงในกระบะ");
 
@@ -630,7 +643,7 @@
                 const size = row.querySelector('.size-select').value;
                 const quantity = parseInt(row.querySelector('.quantity-input').value, 10);
                 const type = row.querySelector('input[name^="type"]:checked')?.value;
-                const priority = row.querySelector('input[name^="priority"]:checked')?.value;
+                const priority = row.querySelector('input[name^="priority']:checked')?.value;
                 const minWeight = parseFloat(row.querySelector('.min-weight-input').value);
                 const maxWeight = parseFloat(row.querySelector('.max-weight-input').value);
 
@@ -1047,18 +1060,67 @@
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
             
+            // Render navigation for sub-pages
+            const navHtml = `
+                <div class="flex space-x-2 mb-6 justify-center flex-wrap gap-2">
+                    <button id="sub-nav-crate-management" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${subPage === 'crate-management' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">จัดการกระบะ</button>
+                    <button id="sub-nav-order-fulfillment" class="px-4 py-2 rounded-full font-semibold transition-colors duration-200 text-base ${subPage === 'order-fulfillment' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">จัดส่งออเดอร์</button>
+                </div>
+            `;
+            
+            pageContent.innerHTML = navHtml + `<div id="sub-page-content"></div>`;
+
+            if (!subPage) {
+                subPage = 'crate-management'; // Set default sub-page
+            }
+
+            if (subPage === 'crate-management') {
+                 renderCrateManagementPage();
+            } else if (subPage === 'order-fulfillment') {
+                 renderOrderFulfillmentPage();
+            }
+        }
+
+        function renderCrateManagementPage() {
+            const pageContent = document.getElementById('sub-page-content');
+            if (!pageContent) return;
+            
             const formHtml = renderRatForm();
             const summaryHtml = `<div id="rat-summary-container" class="bg-gray-50 p-6 rounded-lg shadow-sm"><h2 class="text-xl font-semibold text-gray-700 mb-4">สรุปข้อมูลหนูปัจจุบัน</h2><div id="rat-summary"></div></div>`;
-            const orderSummaryHtml = `<div id="manage-order-summary-container" class="mt-6"></div>`;
+            const messagesHtml = `<div id="messages-container" class="mt-6"></div>`;
 
-            if (['user', 'ceo', 'officer'].includes(currentUserRole)) {
-                 pageContent.innerHTML = `<div class="space-y-6"><div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>${orderSummaryHtml}${summaryHtml}</div>`;
-            } else {
-                 pageContent.innerHTML = `<div class="space-y-6"><div id="messages-container"></div>${formHtml}${orderSummaryHtml}${summaryHtml}</div>`;
+            pageContent.innerHTML = `
+                <div class="space-y-6">
+                    ${(['user', 'ceo', 'officer'].includes(currentUserRole)) ? `<div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>` : messagesHtml}
+                    ${formHtml}
+                    ${summaryHtml}
+                </div>`;
+            
+            if (!['user', 'ceo', 'officer'].includes(currentUserRole)) {
                  renderMessagesOnManagePage();
             }
-            renderManageOrderSummary();
             renderRatSummary();
+        }
+        
+        function renderOrderFulfillmentPage() {
+            const pageContent = document.getElementById('sub-page-content');
+            if (!pageContent) return;
+            
+            const formHtml = renderRatForm();
+            const orderSummaryHtml = `<div id="manage-order-summary-container" class="mt-6"></div>`;
+            const messagesHtml = `<div id="messages-container"></div>`;
+
+            pageContent.innerHTML = `
+                <div class="space-y-6">
+                    ${(['user', 'ceo', 'officer'].includes(currentUserRole)) ? `<div class="text-center p-4 bg-yellow-100 text-yellow-800 rounded-lg">คุณอยู่ในโหมดดูเท่านั้น</div>` : messagesHtml}
+                    ${formHtml}
+                    ${orderSummaryHtml}
+                </div>`;
+            
+            if (!['user', 'ceo', 'officer'].includes(currentUserRole)) {
+                renderMessagesOnManagePage();
+            }
+            renderManageOrderSummary();
         }
 
         function renderMessagesOnManagePage() {
