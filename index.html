@@ -26,7 +26,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, getDocs, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- App ID ---
         const appId = 'default-app-id';
@@ -46,7 +46,7 @@
         let currentUser = null, currentUserRole = null;
         let allRats = [], allOrders = [], allUsers = [];
         let currentPage = 'main';
-        let subPage = '';
+        let subPage = 'crate'; // Default subpage for manage
         let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
         let chartInstances = {};
         let unsubscribeListeners = [];
@@ -119,7 +119,7 @@
             currentUser = null; currentUserRole = null;
             allRats = []; allOrders = []; allUsers = [];
             currentPage = 'main';
-            subPage = '';
+            subPage = 'crate';
             currentRack = ''; currentShelf = ''; currentSide = ''; currentSize = ''; currentWeight = '';
         }
 
@@ -175,6 +175,7 @@
                 const querySnapshot = await getDocs(q);
                 if (querySnapshot.empty) {
                     alert("ไม่พบหนูในกระบะที่เลือก");
+                    button.disabled = false;
                     return;
                 }
 
@@ -347,7 +348,9 @@
                     currentRack = document.getElementById('rat-rack')?.value || '';
                     currentShelf = document.getElementById('rat-shelf')?.value || '';
                     currentSide = document.getElementById('rat-side')?.value || '';
-                    if (currentPage === 'manage') renderCrateSummary();
+                    if (currentPage === 'manage') {
+                         renderCrateSummary();
+                    }
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value; currentWeight = '';
                     if (currentPage === 'manage') document.getElementById('rat-form-container').innerHTML = renderRatForm();
@@ -365,8 +368,11 @@
                 'dashboard': renderDashboardPage, 'main': renderMainPage,
                 'manage': renderManagePage, 'order': renderOrderPage, 'admin': renderAdminPage
             };
-            if (pageRenderers[currentPage]) pageRenderers[currentPage]();
-            else renderMainPage();
+            if (pageRenderers[currentPage]) {
+                pageRenderers[currentPage]();
+            } else {
+                renderMainPage();
+            }
         }
 
         function renderLoadingUI(message) {
@@ -468,7 +474,7 @@
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
             const subNav = `<div class="flex space-x-2 mb-6 justify-center">
-                <button id="sub-nav-manage-crate" class="px-4 py-2 rounded-full font-semibold ${!subPage || subPage === 'crate' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการกระบะ</button>
+                <button id="sub-nav-manage-crate" class="px-4 py-2 rounded-full font-semibold ${subPage === 'crate' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการกระบะ</button>
                 <button id="sub-nav-manage-order" class="px-4 py-2 rounded-full font-semibold ${subPage === 'order' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">จัดการ Order</button>
             </div>`;
             pageContent.innerHTML = `<div class="animate-fade-in">${subNav}<div id="sub-page-content"></div></div>`;
@@ -476,6 +482,7 @@
             if (subPage === 'order') {
                 renderOrderFulfillmentPage();
             } else {
+                subPage = 'crate'; // Default to crate view
                 renderCrateManagementPage();
             }
         }
@@ -643,7 +650,7 @@
             };
 
             let actionButtonHtml = '';
-            if (subPage === 'crate' || !subPage) {
+            if (subPage === 'crate') {
                 actionButtonHtml = `<button id="save-rat-btn" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition" type="button">+ เพิ่มหนู</button>`;
             } else if (subPage === 'order') {
                 actionButtonHtml = `<div class="space-y-2 pt-2">
