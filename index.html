@@ -612,7 +612,7 @@
                 const orderToUpdate = allOrders.find(o => o.id === targetItem.orderId);
                 const updatedItems = [...orderToUpdate.items];
                 updatedItems[targetItem.itemIndex].sent += 1;
-                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetItem.itemId), { items: updatedItems });
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetItem.orderId), { items: updatedItems });
                 alertMessage(`ส่งหนู 1 ตัวเข้า Order '${orderToUpdate.name}' เรียบร้อย!`);
             } catch(error) {
                 console.error("Error fulfilling from manage:", error);
@@ -820,7 +820,10 @@
             const ratCountBySize = {};
             ratSizeOptions.forEach(s => ratCountBySize[s.size] = 0);
             
-            const ratCountByRack = { "Rack 1": 0, "Rack 2": 0, "Rack 3": 0, "Rack 4": 0, "Rack 5", "Rack 6" };
+            const ratCountByRack = {}; // เปลี่ยนเป็น Object เพื่อรองรับจำนวน Rack ที่มากขึ้น
+            for (let i = 1; i <= 6; i++) { // เพิ่มการวนลูปถึง 6
+                ratCountByRack[`Rack ${i}`] = 0;
+            }
             
             allRats.forEach(rat => {
                 const createdAt = new Date(rat.createdAt);
@@ -1148,7 +1151,8 @@
         }
         
         function renderRatForm() {
-            const rackOptions = Array.from({ length: 4 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
+            // ปรับการสร้างตัวเลือก RACK ให้เป็น 6 RACK
+            const rackOptions = Array.from({ length: 6 }, (_, i) => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected' : ''}>Rack ${i + 1}</option>`).join('');
             
             const godModeButton = `
                 <div class="flex items-center justify-center pt-4">
