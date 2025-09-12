@@ -3,31 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการฟาร์มหนู (ฉบับสมบูรณ์)</title>
+    <title>ระบบจัดการฟาร์มหนู (แก้ไข appId)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        @keyframes fade-in {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
         button:disabled { cursor: not-allowed; opacity: 0.7; }
         .modal { transition: opacity 0.3s ease; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4">
-    <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center">
-        <!-- Initial Loading UI -->
-    </div>
+    <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, getDocs, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
+        // --- ขั้นตอนสำคัญ! ---
+        // 1. ไปที่ Firebase Console -> Firestore Database
+        // 2. ดูใต้ collection 'artifacts' จะมี ID ของแอปคุณอยู่
+        // 3. คัดลอก ID นั้นมาวางแทนที่ 'YOUR_APP_ID_HERE' ด้านล่างนี้
+        const appId = 'c_0e6b1ab597f0efa8_index.html-109'; // <--- วาง appId ที่ถูกต้องจาก Firestore ของคุณที่นี่
+
         const firebaseConfig = {
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
             authDomain: "eratfarm-bd035.firebaseapp.com",
@@ -40,22 +39,11 @@
         
         // --- App State ---
         let app, db, auth;
-        let currentUser = null;
-        let currentUserRole = null;
-        let allUsers = [], allMessages = [], allRats = [], allOrders = [];
-        let currentPage = 'main', subPage = '';
-        let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
-        let godModeEnabled = false;
-        let chartInstances = {};
+        let currentUser = null, currentUserRole = null;
+        let allRats = [], allOrders = [];
+        let currentPage = 'main';
         let unsubscribeListeners = [];
 
-        const ratSizeOptions = [
-            { size: "JUMP", minWeight: 9, maxWeight: 13 }, { size: "S", minWeight: 14, maxWeight: 18 },
-            { size: "M", minWeight: 19, maxWeight: 23 }, { size: "L", minWeight: 24, maxWeight: 28 },
-            { size: "XL", minWeight: 29, maxWeight: 33 }, { size: "XXL", minWeight: 34, maxWeight: 38 },
-            { size: "XXL+", minWeight: 39, maxWeight: 45 }
-        ];
-        
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             renderLoadingUI('กำลังเริ่มต้น...');
@@ -64,6 +52,9 @@
         });
 
         async function initializeFirebase() {
+             if (appId === 'YOUR_APP_ID_HERE' || !appId) {
+                return renderError("ยังไม่ได้กำหนดค่า 'appId' ในโค้ด. กรุณาแก้ไขไฟล์ index.html บรรทัดที่ 18");
+            }
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -73,7 +64,6 @@
                     clearAllListeners();
                     if (user) {
                         currentUser = user;
-                        godModeEnabled = localStorage.getItem('godModeEnabled') === 'true';
                         await checkUserRole(user);
                         renderAppStructure();
                         attachDataListeners();
@@ -88,23 +78,22 @@
             }
         }
 
-        // --- State and Data Management ---
+        // --- Data Management ---
         function attachDataListeners() {
-            clearAllListeners();
             unsubscribeListeners.push(onSnapshot(collection(db, `artifacts/${appId}/public/data/rats`), 
-                (snapshot) => { allRats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); updateDataDrivenUI(); },
+                (snapshot) => { 
+                    allRats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+                    updateDataDrivenUI(); 
+                },
                 (err) => console.error("Rats Listener Error:", err))
             );
             unsubscribeListeners.push(onSnapshot(collection(db, `artifacts/${appId}/public/data/orders`),
-                (snapshot) => { allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); updateDataDrivenUI(); },
+                (snapshot) => { 
+                    allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
+                    updateDataDrivenUI(); 
+                },
                 (err) => console.error("Orders Listener Error:", err))
             );
-            if (currentUserRole === 'admin') {
-                unsubscribeListeners.push(onSnapshot(collection(db, `artifacts/${appId}/public/data/user_roles`),
-                    (snapshot) => { allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (currentPage === 'admin') renderAdminPage(); },
-                    (err) => console.error("Users Listener Error:", err))
-                );
-            }
         }
 
         function clearAllListeners() {
@@ -114,7 +103,7 @@
 
         function resetAppState() {
             currentUser = null; currentUserRole = null;
-            allRats = []; allOrders = []; allUsers = [];
+            allRats = []; allOrders = [];
             currentPage = 'main';
         }
 
@@ -136,116 +125,75 @@
                 }
             } catch (error) {
                 console.error("Check Role Error:", error);
-                renderError("ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้ กรุณาตรวจสอบ Firestore Security Rules ของคุณ");
+                renderError("ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้ กรุณาตรวจสอบ Firestore Security Rules");
             }
         }
         
         // --- Authentication ---
-        async function signInWithGoogle() { /* ... unchanged ... */ }
-        async function signOutUser() { /* ... unchanged ... */ }
+        async function signInWithGoogle() {
+            const provider = new GoogleAuthProvider();
+            try { await signInWithPopup(auth, provider); } catch (error) { console.error("Sign In Error:", error); }
+        }
+        async function signOutUser() {
+            try { await signOut(auth); } catch (error) { console.error("Sign Out Error:", error); }
+        }
 
         // --- Event Listeners ---
         function setupEventListeners() {
-            document.body.addEventListener('click', async (e) => {
+            document.body.addEventListener('click', (e) => {
                 const button = e.target.closest('button');
                 if (!button) return;
                 const id = button.id || '';
 
-                if (id === 'google-signin-btn') await signInWithGoogle();
-                else if (id === 'signout-btn') await signOutUser();
+                if (id === 'google-signin-btn') signInWithGoogle();
+                else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
                     currentPage = id.split('-')[1];
-                    subPage = '';
                     renderPageContent();
-                } else if (button.classList.contains('delete-order-btn')) { 
-                    e.preventDefault(); 
-                    if (confirm('คุณต้องการลบ Order นี้ใช่หรือไม่?')) {
-                        await deleteOrder(button.dataset.orderId);
-                    }
-                } else if (id === 'open-add-order-modal') {
-                    const modal = document.getElementById('add-order-modal');
-                    if(modal) modal.classList.remove('hidden');
-                } else if (button.classList.contains('close-modal-btn')) {
-                    const modal = button.closest('.modal');
-                    if(modal) modal.classList.add('hidden');
                 }
-                // Add other button clicks here
             });
-            // Add other event listeners ('change', etc.) here
         }
-
-        // --- Core Logic Functions ---
-        async function deleteOrder(orderId) {
-            if (!['admin', 'officer'].includes(currentUserRole)) return alertMessage("ไม่มีสิทธิ์ดำเนินการ");
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId));
-                alertMessage("ลบ Order สำเร็จ");
-            } catch (error) {
-                console.error("Delete Order Error:", error);
-                alertMessage("เกิดข้อผิดพลาดในการลบ Order");
-            }
-        }
-
+        
         // --- UI Rendering ---
         function updateDataDrivenUI() {
             const pageRenderers = {
-                'dashboard': renderDashboardPage,
-                'main': renderMainPage,
-                'manage': renderManagePage,
-                'order': renderOrderPage,
-                'admin': renderAdminPage
+                'dashboard': renderDashboardPage, 'main': renderMainPage,
+                'manage': renderManagePage, 'order': renderOrderPage, 'admin': renderAdminPage
             };
-            if (pageRenderers[currentPage]) {
-                pageRenderers[currentPage]();
-            }
+            if (pageRenderers[currentPage]) pageRenderers[currentPage]();
         }
 
         function renderLoadingUI(message) {
-            const appContainer = document.getElementById('app-container');
-            if (appContainer) {
-                appContainer.innerHTML = `<div class="flex items-center justify-center text-gray-500"><svg class="animate-spin h-8 w-8 text-gray-400 mr-3" viewBox="0 0 24 24">...</svg><p>${message}</p></div>`;
-            }
+            const container = document.getElementById('app-container');
+            if(container) container.innerHTML = `<div class="text-gray-500">${message}</div>`;
         }
 
         function renderError(message) {
-            const appContainer = document.getElementById('app-container');
-            if (appContainer) {
-                appContainer.innerHTML = `<div class="text-red-500 text-center p-8"><h2 class="text-3xl font-bold mb-2">เกิดข้อผิดพลาด</h2><p class="text-lg">${message}</p></div>`;
-            }
+            const container = document.getElementById('app-container');
+            if(container) container.innerHTML = `<div class="text-red-500 text-center p-4"><h2 class="font-bold">เกิดข้อผิดพลาด</h2><p>${message}</p></div>`;
         }
         
         function renderLoginUI() {
-             document.getElementById('app-container').innerHTML = `
+            const container = document.getElementById('app-container');
+            if(container) container.innerHTML = `
                 <div class="p-4 bg-white rounded-xl shadow-lg w-full max-w-md mx-auto text-center animate-fade-in">
                     <h1 class="text-3xl font-bold text-gray-800 mb-2">ระบบจัดการฟาร์มหนู</h1>
-                    <p class="text-gray-600 mb-6">กรุณาลงชื่อเข้าใช้เพื่อเริ่มต้น</p>
-                    <button id="google-signin-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-full hover:bg-blue-700 transition-colors flex items-center justify-center w-full">
-                        <svg class="w-6 h-6 mr-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">...</svg>
-                        ลงชื่อเข้าใช้ด้วย Google
-                    </button>
+                    <p class="text-gray-600 mb-6">กรุณาลงชื่อเข้าใช้</p>
+                    <button id="google-signin-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-full w-full">ลงชื่อเข้าใช้ด้วย Google</button>
                 </div>`;
         }
         
         function renderAppStructure() {
-            const appContainer = document.getElementById('app-container');
-            if (!appContainer) return;
-            appContainer.innerHTML = `
+            const container = document.getElementById('app-container');
+            if(container) container.innerHTML = `
                 <div class="w-full max-w-4xl mx-auto">
-                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 pb-4 border-b-2">
-                         <div class="flex items-center">
-                             <img src="${currentUser.photoURL || 'https://placehold.co/40x40'}" alt="User" class="w-10 h-10 rounded-full mr-3">
-                             <div>
-                                 <p class="font-semibold">${currentUser.displayName}</p>
-                                 <p class="text-xs text-gray-500">${currentUser.email} (${currentUserRole})</p>
-                             </div>
-                         </div>
-                         <button id="signout-btn" class="bg-red-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-red-600 text-sm mt-2 sm:mt-0">ออกจากระบบ</button>
+                     <div class="flex justify-between items-center mb-4 pb-4 border-b">
+                         <div class="flex items-center"><img src="${currentUser.photoURL}" alt="User" class="w-10 h-10 rounded-full mr-3"><div><p class="font-semibold">${currentUser.displayName}</p><p class="text-xs text-gray-500">${currentUserRole}</p></div></div>
+                         <button id="signout-btn" class="bg-red-500 text-white px-4 py-2 rounded-full font-semibold">ออกจากระบบ</button>
                      </div>
-                     <div id="nav-container" class="flex space-x-2 mb-6 justify-center flex-wrap gap-2"></div>
+                     <div id="nav-container" class="flex space-x-2 mb-6 justify-center"></div>
                      <div id="page-content" class="min-h-[400px]"></div>
-                </div>
-                ${renderAddOrderModal()}
-            `;
+                </div>`;
             renderPageContent();
         }
 
@@ -254,14 +202,19 @@
              const navContainer = document.getElementById('nav-container');
              if (!pageContent || !navContainer) return;
 
-             const navButtonsHtml = `
-                ${(['admin', 'ceo'].includes(currentUserRole)) ? `<button id="nav-dashboard" class="px-4 py-2 rounded-full font-semibold ${currentPage === 'dashboard' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">Dashboard</button>`:''}
-                <button id="nav-main" class="px-4 py-2 rounded-full font-semibold ${currentPage === 'main' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">หน้าหลัก</button>
-                <button id="nav-manage" class="px-4 py-2 rounded-full font-semibold ${currentPage === 'manage' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">แผนกขุน</button>
-                <button id="nav-order" class="px-4 py-2 rounded-full font-semibold ${currentPage === 'order' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">Order</button>
-                ${currentUserRole === 'admin' ? `<button id="nav-admin" class="px-4 py-2 rounded-full font-semibold ${currentPage === 'admin' ? 'bg-blue-500 text-white' : 'bg-gray-200'}">Admin</button>` : ''}
-             `;
-             navContainer.innerHTML = navButtonsHtml;
+             const navButtons = [
+                { id: 'dashboard', label: 'Dashboard', roles: ['admin', 'ceo'] },
+                { id: 'main', label: 'หน้าหลัก', roles: ['admin', 'ceo', 'officer', 'fattening_staff', 'user'] },
+                { id: 'manage', label: 'แผนกขุน', roles: ['admin', 'fattening_staff'] },
+                { id: 'order', label: 'Order', roles: ['admin', 'officer'] },
+                { id: 'admin', label: 'Admin', roles: ['admin'] }
+             ];
+
+             navContainer.innerHTML = navButtons
+                .filter(btn => btn.roles.includes(currentUserRole))
+                .map(btn => `<button id="nav-${btn.id}" class="px-4 py-2 rounded-full font-semibold ${currentPage === btn.id ? 'bg-blue-500 text-white' : 'bg-gray-200'}">${btn.label}</button>`)
+                .join('');
+             
              renderLoadingUI('กำลังโหลดข้อมูล...');
              updateDataDrivenUI();
         }
@@ -271,74 +224,33 @@
             if (!pageContent) return;
             pageContent.innerHTML = `<div class="animate-fade-in space-y-4">
                 <h1 class="text-2xl font-bold">หน้าหลัก</h1>
-                <p>จำนวนหนูทั้งหมด: ${allRats.length}</p>
-                <p>จำนวนออเดอร์ทั้งหมด: ${allOrders.length}</p>
+                <div class="p-4 bg-gray-100 rounded-lg">
+                    <p class="text-lg">จำนวนหนูทั้งหมด: <span class="font-bold">${allRats.length}</span> ตัว</p>
+                    <p class="text-lg">จำนวนออเดอร์ที่ใช้งาน: <span class="font-bold">${allOrders.filter(o => o.items.some(i => i.sent < i.quantity)).length}</span> รายการ</p>
+                </div>
             </div>`;
         }
 
         function renderDashboardPage() {
             const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">Dashboard</h1><p>Welcome to the dashboard.</p></div>`;
+            if(pageContent) pageContent.innerHTML = `<div>Dashboard Content</div>`;
         }
-
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">แผนกขุน</h1><p>Manage your rats here.</p></div>`;
+            if(pageContent) pageContent.innerHTML = `<div>Manage Content</div>`;
         }
-
         function renderOrderPage() {
             const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const sortedOrders = [...allOrders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-            const orderListHtml = sortedOrders.map(order => {
-                return `<div class="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h3 class="text-xl font-bold">${order.name}</h3>
-                            <p class="text-xs text-gray-500">สร้างเมื่อ: ${new Date(order.createdAt).toLocaleDateString('th-TH')}</p>
-                        </div>
-                        ${['admin','officer'].includes(currentUserRole) ? `<button class="delete-order-btn text-red-500" data-order-id="${order.id}">ลบ</button>` : ''}
-                    </div>
-                </div>`;
-            }).join('') || '<p class="text-center text-gray-500">ยังไม่มี Order</p>';
-
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-4">
-                <div class="flex justify-between items-center">
-                    <h1 class="text-2xl font-bold">รายการ Order</h1>
-                    ${['admin', 'officer'].includes(currentUserRole) ? `<button id="open-add-order-modal" class="bg-blue-600 text-white px-4 py-2 rounded-full font-bold">+ เพิ่ม Order</button>` : ''}
-                </div>
-                <div class="space-y-4">${orderListHtml}</div>
-            </div>`;
+            if(pageContent) pageContent.innerHTML = `<div>Order Content</div>`;
         }
-
         function renderAdminPage() {
             const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-             pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">Admin</h1><p>Manage users here.</p></div>`;
-        }
-        
-        function renderAddOrderModal() {
-            return `<div id="add-order-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
-                <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg mx-auto">
-                    <h2 class="text-2xl font-bold mb-4">สร้าง Order ใหม่</h2>
-                    <p>Modal content for adding an order.</p>
-                    <button class="close-modal-btn mt-4 bg-red-500 text-white px-4 py-2 rounded">ปิด</button>
-                </div>
-            </div>`;
-        }
-
-        function alertMessage(message) {
-            const alertBox = document.createElement('div');
-            alertBox.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50 animate-fade-in';
-            alertBox.textContent = message;
-            document.body.appendChild(alertBox);
-            setTimeout(() => {
-                alertBox.remove();
-            }, 3000);
+            if(pageContent) pageContent.innerHTML = `<div>Admin Content</div>`;
         }
 
     </script>
 </body>
 </html>
+
+
+
