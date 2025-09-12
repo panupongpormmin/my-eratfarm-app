@@ -14,7 +14,13 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4">
-    <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center"></div>
+    <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center">
+        <!-- สถานะโหลดเริ่มต้น -->
+        <div class="text-gray-500 flex items-center">
+            <svg class="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            กำลังเริ่มต้น...
+        </div>
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -22,7 +28,6 @@
         import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, getDocs, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- App ID ---
-        // ใช้ ID แบบคงที่เพื่อความเสถียรและป้องกันข้อผิดพลาด
         const appId = 'default-app-id';
 
         const firebaseConfig = {
@@ -44,7 +49,6 @@
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            renderLoadingUI('กำลังเริ่มต้น...');
             initializeFirebase();
             setupEventListeners();
         });
@@ -166,8 +170,8 @@
         }
 
         function renderLoadingUI(message) {
-            const container = document.getElementById('app-container');
-            if(container) container.innerHTML = `<div class="text-gray-500 flex items-center"><svg class="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${message}</div>`;
+            const container = document.getElementById('page-content');
+            if(container) container.innerHTML = `<div class="text-gray-500 flex items-center justify-center p-8"><svg class="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${message}</div>`;
         }
 
         function renderError(message) {
