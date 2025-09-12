@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการฟาร์มหนู (แก้ไข appId)</title>
+    <title>ระบบจัดการฟาร์มหนู</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -19,13 +19,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, getDocs, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, getDocs, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- ขั้นตอนสำคัญ! ---
-        // 1. ไปที่ Firebase Console -> Firestore Database
-        // 2. ดูใต้ collection 'artifacts' จะมี ID ของแอปคุณอยู่
-        // 3. คัดลอก ID นั้นมาวางแทนที่ 'YOUR_APP_ID_HERE' ด้านล่างนี้
-        const appId = 'c_0e6b1ab597f0efa8_index.html-109'; // <--- วาง appId ที่ถูกต้องจาก Firestore ของคุณที่นี่
+        // --- App ID ---
+        // ใช้ ID แบบคงที่เพื่อความเสถียรและป้องกันข้อผิดพลาด
+        const appId = 'default-app-id';
 
         const firebaseConfig = {
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
@@ -52,9 +50,6 @@
         });
 
         async function initializeFirebase() {
-             if (appId === 'YOUR_APP_ID_HERE' || !appId) {
-                return renderError("ยังไม่ได้กำหนดค่า 'appId' ในโค้ด. กรุณาแก้ไขไฟล์ index.html บรรทัดที่ 18");
-            }
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -74,25 +69,28 @@
                 });
             } catch (error) {
                 console.error("Firebase Init Error:", error);
-                renderError("การเริ่มต้น Firebase ล้มเหลว");
+                renderError("การเริ่มต้น Firebase ล้มเหลว: " + error.message);
             }
         }
 
         // --- Data Management ---
         function attachDataListeners() {
-            unsubscribeListeners.push(onSnapshot(collection(db, `artifacts/${appId}/public/data/rats`), 
+            const ratsPath = `artifacts/${appId}/public/data/rats`;
+            const ordersPath = `artifacts/${appId}/public/data/orders`;
+
+            unsubscribeListeners.push(onSnapshot(collection(db, ratsPath), 
                 (snapshot) => { 
                     allRats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
                     updateDataDrivenUI(); 
                 },
-                (err) => console.error("Rats Listener Error:", err))
+                (err) => { console.error("Rats Listener Error:", err); renderError("ไม่สามารถโหลดข้อมูลหนูได้: " + err.message); })
             );
-            unsubscribeListeners.push(onSnapshot(collection(db, `artifacts/${appId}/public/data/orders`),
+            unsubscribeListeners.push(onSnapshot(collection(db, ordersPath),
                 (snapshot) => { 
                     allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
                     updateDataDrivenUI(); 
                 },
-                (err) => console.error("Orders Listener Error:", err))
+                (err) => { console.error("Orders Listener Error:", err); renderError("ไม่สามารถโหลดข้อมูลออเดอร์ได้: " + err.message); })
             );
         }
 
@@ -125,7 +123,7 @@
                 }
             } catch (error) {
                 console.error("Check Role Error:", error);
-                renderError("ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้ กรุณาตรวจสอบ Firestore Security Rules");
+                renderError("ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้: " + error.message + "<br>กรุณาตรวจสอบ Firestore Security Rules ของคุณ");
             }
         }
         
@@ -160,38 +158,45 @@
                 'dashboard': renderDashboardPage, 'main': renderMainPage,
                 'manage': renderManagePage, 'order': renderOrderPage, 'admin': renderAdminPage
             };
-            if (pageRenderers[currentPage]) pageRenderers[currentPage]();
+            if (pageRenderers[currentPage]) {
+                pageRenderers[currentPage]();
+            } else {
+                renderMainPage(); // Fallback
+            }
         }
 
         function renderLoadingUI(message) {
             const container = document.getElementById('app-container');
-            if(container) container.innerHTML = `<div class="text-gray-500">${message}</div>`;
+            if(container) container.innerHTML = `<div class="text-gray-500 flex items-center"><svg class="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${message}</div>`;
         }
 
         function renderError(message) {
             const container = document.getElementById('app-container');
-            if(container) container.innerHTML = `<div class="text-red-500 text-center p-4"><h2 class="font-bold">เกิดข้อผิดพลาด</h2><p>${message}</p></div>`;
+            if(container) container.innerHTML = `<div class="text-red-500 text-center p-4 bg-red-50 rounded-lg"><h2 class="font-bold text-lg">เกิดข้อผิดพลาด</h2><p class="mt-2">${message}</p></div>`;
         }
         
         function renderLoginUI() {
             const container = document.getElementById('app-container');
             if(container) container.innerHTML = `
-                <div class="p-4 bg-white rounded-xl shadow-lg w-full max-w-md mx-auto text-center animate-fade-in">
+                <div class="p-8 bg-white rounded-xl shadow-lg w-full max-w-md mx-auto text-center animate-fade-in">
                     <h1 class="text-3xl font-bold text-gray-800 mb-2">ระบบจัดการฟาร์มหนู</h1>
-                    <p class="text-gray-600 mb-6">กรุณาลงชื่อเข้าใช้</p>
-                    <button id="google-signin-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-full w-full">ลงชื่อเข้าใช้ด้วย Google</button>
+                    <p class="text-gray-600 mb-6">กรุณาลงชื่อเข้าใช้เพื่อเริ่มต้น</p>
+                    <button id="google-signin-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-full w-full hover:bg-blue-700 transition flex items-center justify-center">
+                        <svg class="w-6 h-6 mr-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691c-1.219 2.22-1.994 4.7-1.994 7.309s.775 5.089 1.994 7.309l-5.657 5.657C.654 30.65 0 27.464 0 24s.654-6.65 1.748-9.358z"/><path fill="#4CAF50" d="M24 48c5.166 0 9.86-1.977 13.409-5.192l-5.657-5.657c-1.746 1.17-3.956 1.849-6.302 1.849-4.207 0-7.837-2.37-9.84-5.698l-5.657 5.657C9.043 43.125 15.93 48 24 48z"/><path fill="#1976D2" d="M43.611 20.083L43.595 20H24v8h11.303a12.042 12.042 0 01-4.087 5.571l5.657 5.657C40.071 35.731 44 30.34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                        ลงชื่อเข้าใช้ด้วย Google
+                    </button>
                 </div>`;
         }
         
         function renderAppStructure() {
             const container = document.getElementById('app-container');
             if(container) container.innerHTML = `
-                <div class="w-full max-w-4xl mx-auto">
-                     <div class="flex justify-between items-center mb-4 pb-4 border-b">
-                         <div class="flex items-center"><img src="${currentUser.photoURL}" alt="User" class="w-10 h-10 rounded-full mr-3"><div><p class="font-semibold">${currentUser.displayName}</p><p class="text-xs text-gray-500">${currentUserRole}</p></div></div>
-                         <button id="signout-btn" class="bg-red-500 text-white px-4 py-2 rounded-full font-semibold">ออกจากระบบ</button>
+                <div class="w-full max-w-5xl mx-auto animate-fade-in">
+                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 pb-4 border-b">
+                         <div class="flex items-center mb-4 sm:mb-0"><img src="${currentUser.photoURL}" alt="User" class="w-10 h-10 rounded-full mr-3"><div><p class="font-semibold">${currentUser.displayName}</p><p class="text-xs text-gray-500 uppercase font-bold">${currentUserRole}</p></div></div>
+                         <button id="signout-btn" class="bg-red-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-red-600 transition">ออกจากระบบ</button>
                      </div>
-                     <div id="nav-container" class="flex space-x-2 mb-6 justify-center"></div>
+                     <div id="nav-container" class="flex space-x-2 mb-6 justify-center flex-wrap gap-2"></div>
                      <div id="page-content" class="min-h-[400px]"></div>
                 </div>`;
             renderPageContent();
@@ -212,7 +217,7 @@
 
              navContainer.innerHTML = navButtons
                 .filter(btn => btn.roles.includes(currentUserRole))
-                .map(btn => `<button id="nav-${btn.id}" class="px-4 py-2 rounded-full font-semibold ${currentPage === btn.id ? 'bg-blue-500 text-white' : 'bg-gray-200'}">${btn.label}</button>`)
+                .map(btn => `<button id="nav-${btn.id}" class="px-4 py-2 rounded-full font-semibold transition ${currentPage === btn.id ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">${btn.label}</button>`)
                 .join('');
              
              renderLoadingUI('กำลังโหลดข้อมูล...');
@@ -222,35 +227,34 @@
         function renderMainPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-4">
-                <h1 class="text-2xl font-bold">หน้าหลัก</h1>
-                <div class="p-4 bg-gray-100 rounded-lg">
-                    <p class="text-lg">จำนวนหนูทั้งหมด: <span class="font-bold">${allRats.length}</span> ตัว</p>
-                    <p class="text-lg">จำนวนออเดอร์ที่ใช้งาน: <span class="font-bold">${allOrders.filter(o => o.items.some(i => i.sent < i.quantity)).length}</span> รายการ</p>
+            pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
+                <div class="p-6 bg-gray-50 rounded-lg">
+                    <h1 class="text-2xl font-bold text-gray-800">ภาพรวมฟาร์ม</h1>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div class="bg-blue-100 p-4 rounded-lg"><p class="text-blue-800">จำนวนหนูทั้งหมด</p><p class="text-3xl font-bold text-blue-900">${allRats.length} ตัว</p></div>
+                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-green-800">ออเดอร์ที่ใช้งาน</p><p class="text-3xl font-bold text-green-900">${allOrders.filter(o => o.items && o.items.some(i => i.sent < i.quantity)).length} รายการ</p></div>
+                    </div>
                 </div>
             </div>`;
         }
 
         function renderDashboardPage() {
             const pageContent = document.getElementById('page-content');
-            if(pageContent) pageContent.innerHTML = `<div>Dashboard Content</div>`;
+            if(pageContent) pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">Dashboard</h1><p>เนื้อหาสำหรับ Dashboard</p></div>`;
         }
         function renderManagePage() {
             const pageContent = document.getElementById('page-content');
-            if(pageContent) pageContent.innerHTML = `<div>Manage Content</div>`;
+            if(pageContent) pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">แผนกขุน</h1><p>เนื้อหาสำหรับแผนกขุน</p></div>`;
         }
         function renderOrderPage() {
             const pageContent = document.getElementById('page-content');
-            if(pageContent) pageContent.innerHTML = `<div>Order Content</div>`;
+            if(pageContent) pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">จัดการ Order</h1><p>เนื้อหาสำหรับจัดการ Order</p></div>`;
         }
         function renderAdminPage() {
             const pageContent = document.getElementById('page-content');
-            if(pageContent) pageContent.innerHTML = `<div>Admin Content</div>`;
+            if(pageContent) pageContent.innerHTML = `<div class="animate-fade-in"><h1 class="text-2xl font-bold">Admin</h1><p>เนื้อหาสำหรับ Admin</p></div>`;
         }
-
     </script>
 </body>
 </html>
-
-
 
