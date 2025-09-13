@@ -344,6 +344,7 @@
                 alert("เกิดข้อผิดพลาดในการส่ง Order");
             } finally {
                 button.disabled = false;
+                document.getElementById('action-modal').classList.add('hidden');
             }
         }
         
@@ -431,6 +432,20 @@
                 else if (classList.contains('delete-order-btn')) deleteOrder(button.dataset.orderId);
                 else if (classList.contains('mark-order-success')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'completed');
                 else if (classList.contains('mark-order-fail')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'incomplete');
+                else if (classList.contains('size-selector-btn')) {
+                    currentSize = button.dataset.size;
+                    currentWeight = '';
+                    renderFatteningOrderManager();
+                } else if (classList.contains('weight-selector-btn')) {
+                    if (!currentRack || !currentShelf || !currentSide) {
+                        return alert("กรุณาเลือกตำแหน่งของกระบะก่อน");
+                    }
+                    currentWeight = button.dataset.weight;
+                    const modal = document.getElementById('action-modal');
+                    const info = document.getElementById('action-modal-info');
+                    if (info) info.textContent = `ตำแหน่ง: ${currentRack}/${currentShelf}/${currentSide} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
+                    if (modal) modal.classList.remove('hidden');
+                }
             });
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
@@ -438,7 +453,10 @@
                     currentRack = document.getElementById('rat-rack')?.value || '';
                     currentShelf = document.getElementById('rat-shelf')?.value || '';
                     currentSide = document.getElementById('rat-side')?.value || '';
-                    if (currentPage === 'department') renderCrateSummary();
+                    if (currentPage === 'department') {
+                        if (fatteningSubPage === 'crate') renderCrateSummary();
+                        else if (fatteningSubPage === 'order') renderFatteningOrderManager();
+                    }
                 } else if (target.name === 'rat-size') {
                     currentSize = target.value; currentWeight = '';
                     if (currentPage === 'department') document.getElementById('rat-form-container').innerHTML = renderRatForm();
@@ -495,7 +513,7 @@
                      <div id="nav-container" class="flex space-x-2 mb-6 justify-center flex-wrap gap-2"></div>
                      <div id="page-content" class="min-h-[400px]"></div>
                 </div>`;
-            document.getElementById('modal-container').innerHTML = renderAddOrderModal() + renderDeleteRatModal();
+            document.getElementById('modal-container').innerHTML = renderAddOrderModal() + renderDeleteRatModal() + renderActionModal();
             renderPageContent();
         }
 
@@ -587,15 +605,7 @@
              const container = document.getElementById('fattening-content-container');
              if(!container) return;
              if (fatteningSubPage === 'order') {
-                container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div id="rat-form-container">${renderRatForm()}</div>
-                    <div class="space-y-6">
-                        <div id="crate-summary-container"></div>
-                        <div id="active-orders-summary-container"></div>
-                    </div>
-                </div>`;
-                renderCrateSummary();
-                renderActiveOrdersSummary();
+                renderFatteningOrderManager();
             } else if (fatteningSubPage === 'analytics') {
                 renderFatteningAnalytics(container);
             }
