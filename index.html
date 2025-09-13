@@ -85,6 +85,7 @@
         let app, db, auth;
         let currentUser = null, currentUserRole = null;
         let allRats = [], allOrders = [], allUsers = [], allDeaths = [];
+        let farmConfig = { rackCount: 6 }; // Default config
         let currentPage = 'main';
         let subPage = '';
         let fatteningSubPage = 'crate';
@@ -136,6 +137,7 @@
                 orders: `artifacts/${appId}/public/data/orders`,
                 users: `artifacts/${appId}/public/data/user_roles`,
                 deaths: `artifacts/${appId}/public/data/deaths`,
+                config: `artifacts/${appId}/public/data/farm_config`,
             };
             const addListener = (path, stateUpdater, onError) => {
                 unsubscribeListeners.push(onSnapshot(collection(db, path), 
@@ -143,6 +145,16 @@
                     onError
                 ));
             };
+            
+            unsubscribeListeners.push(onSnapshot(doc(db, paths.config, 'main'), (docSnap) => {
+                if (docSnap.exists()) {
+                    farmConfig = docSnap.data();
+                } else {
+                    farmConfig = { rackCount: 6 };
+                }
+                updateDataDrivenUI();
+            }));
+
             addListener(paths.rats, (data) => allRats = data, (err) => console.error("Rats Listener Error:", err));
             addListener(paths.orders, (data) => allOrders = data, (err) => console.error("Orders Listener Error:", err));
             addListener(paths.deaths, (data) => allDeaths = data, (err) => console.error("Deaths Listener Error:", err));
@@ -160,6 +172,7 @@
         function resetAppState() {
             currentUser = null; currentUserRole = null;
             allRats = []; allOrders = []; allUsers = []; allDeaths = [];
+            farmConfig = { rackCount: 6 };
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
             currentRack = ''; currentShelf = ''; currentSide = ''; currentSize = ''; currentWeight = '';
         }
@@ -187,6 +200,22 @@
         }
         
         // --- Logic Functions ---
+        async function addRack(button) {
+            if (currentUserRole !== 'admin') return;
+            button.disabled = true;
+            const configRef = doc(db, `artifacts/${appId}/public/data/farm_config`, 'main');
+            try {
+                const newRackCount = (farmConfig.rackCount || 6) + 1;
+                await setDoc(configRef, { rackCount: newRackCount }, { merge: true });
+                alert(`เพิ่ม Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`);
+            } catch (e) {
+                console.error("Error adding rack:", e);
+                alert("เกิดข้อผิดพลาดในการเพิ่ม Rack");
+            } finally {
+                button.disabled = false;
+            }
+        }
+
         async function deleteClosestRat(button) {
             const weightInput = document.getElementById('delete-rat-weight-input');
             const targetWeight = parseFloat(weightInput.value);
@@ -793,9 +822,17 @@
                     </select>
                 </div>
             `).join('');
+             const rackManagementHtml = `
+                <div class="bg-gray-50 p-6 rounded-lg shadow-sm mt-6">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4">จัดการ Rack</h2>
+                    <p class="mb-2">จำนวน Rack ปัจจุบัน: <span class="font-bold">${farmConfig.rackCount || 6}</span></p>
+                    <button id="add-rack-btn" class="bg-green-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-green-600 transition">+ เพิ่ม Rack 1 อัน</button>
+                </div>
+            `;
             pageContent.innerHTML = `<div class="animate-fade-in space-y-4">
                 <h1 class="text-2xl font-bold">จัดการสิทธิ์ผู้ใช้</h1>
                 <div class="space-y-2">${usersHtml}</div>
+                ${rackManagementHtml}
             </div>`;
         }
 
@@ -819,7 +856,7 @@
 
         // --- UI Components ---
         function renderRatForm() {
-            const rackOptions = [...Array(6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
+            const rackOptions = [...Array(farmConfig.rackCount || 6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
             const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
             const sideOptions = ['ซ้าย', 'ขวา'].map(s => `<option value="${s}" ${currentSide === s ? 'selected':''}>${s}</option>`).join('');
             const sizeRadios = ratSizeOptions.map(opt => `<div><input type="radio" id="size-${opt.size}" name="rat-size" value="${opt.size}" class="hidden peer" ${currentSize === opt.size ? 'checked':''}><label for="size-${opt.size}" class="cursor-pointer block p-2 text-center border rounded peer-checked:bg-blue-500 peer-checked:text-white">${opt.size}</label></div>`).join('');
@@ -858,7 +895,7 @@
         function renderFatteningOrderManager() {
             const container = document.getElementById('fattening-content-container');
             if (!container) return;
-            const rackOptions = [...Array(6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
+            const rackOptions = [...Array(farmConfig.rackCount || 6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
             const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
             const sideOptions = ['ซ้าย', 'ขวา'].map(s => `<option value="${s}" ${currentSide === s ? 'selected':''}>${s}</option>`).join('');
             const sizeButtonsHtml = ratSizeOptions.map(opt => `<button class="size-selector-btn p-3 border-2 rounded-lg font-semibold ${currentSize === opt.size ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-300'}" data-size="${opt.size}">${opt.size}</button>`).join('');
@@ -881,6 +918,7 @@
                         <div><label class="block mb-1 font-semibold text-gray-700">Rack</label><select id="rat-rack" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${rackOptions}</select></div>
                         <div><label class="block mb-1 font-semibold text-gray-700">ชั้น</label><select id="rat-shelf" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${shelfOptions}</select></div>
                         <div><label class="block mb-1 font-semibold text-gray-700">กระบะ</label><select id="rat-side" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${sideOptions}</select></div>
+                        <div id="order-page-summary-container"></div>
                     </div>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4">
                         <h2 class="text-xl font-bold">2. เลือกไซส์และน้ำหนักหนู</h2>
@@ -888,16 +926,23 @@
                         <div id="weight-selection-container" class="grid grid-cols-5 gap-2 mt-4">${weightButtonsHtml}</div>
                     </div>
                 </div>`;
+            renderCrateSummary();
         }
         function renderCrateSummary() {
-            const container = document.getElementById('crate-summary-container');
+            let container;
+            if (currentPage === 'department' && fatteningSubPage === 'crate') {
+                container = document.getElementById('crate-summary-container');
+            } else if (currentPage === 'department' && fatteningSubPage === 'order') {
+                container = document.getElementById('order-page-summary-container');
+            } else { return; }
+            
             if(!container) return;
             if (!currentRack || !currentShelf || !currentSide) {
-                container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg text-center text-gray-500 h-full flex items-center justify-center">โปรดเลือกตำแหน่งเพื่อดูสรุป</div>`; return;
+                container.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center text-gray-500">โปรดเลือกตำแหน่งเพื่อดูสรุป</div>`; return;
             }
             const filteredRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
             const count = filteredRats.length;
-            container.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg space-y-2">
+            container.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg space-y-2">
                 <h3 class="font-bold text-xl">สรุปกระบะ</h3>
                 <p class="text-lg">${currentRack} / ชั้น ${currentShelf} / ${currentSide}</p>
                 <p class="text-4xl font-bold">${count} <span class="text-xl font-normal">ตัว</span></p>
