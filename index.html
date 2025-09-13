@@ -497,9 +497,8 @@
              const navButtons = [
                 { id: 'dashboard', label: 'Dashboard', roles: ['admin', 'ceo'] },
                 { id: 'main', label: 'หน้าหลัก', roles: ['admin', 'ceo', 'officer', 'fattening_staff', 'user'] },
-                { id: 'department', label: 'แผนก', roles: ['admin', 'fattening_staff'] },
+                { id: 'department', label: 'แผนก', roles: ['admin', 'fattening_staff', 'ceo'] },
                 { id: 'ordertasks', label: 'Order / งาน', roles: ['admin', 'officer', 'fattening_staff'] },
-                { id: 'analytics', label: 'Analytics', roles: ['admin', 'ceo'] },
                 { id: 'admin', label: 'Admin', roles: ['admin'] }
              ];
 
@@ -730,25 +729,6 @@
             </div>`;
         }
 
-        function renderAnalyticsPage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const totalPopulation = allRats.length + allDeaths.length;
-            const mortalityRate = totalPopulation > 0 ? ((allDeaths.length / totalPopulation) * 100).toFixed(2) : 0;
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
-                <h1 class="text-2xl font-bold">Analytics - การวิเคราะห์ข้อมูลเชิงลึก</h1>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div class="bg-red-50 p-6 rounded-lg shadow">
-                        <h2 class="text-red-800 font-bold text-lg">อัตราการตาย</h2>
-                        <p class="text-4xl font-bold text-red-600 mt-2">${mortalityRate}%</p>
-                        <p class="text-sm text-gray-500 mt-1">จากข้อมูลหนูทั้งหมด ${totalPopulation} ตัว (ตาย ${allDeaths.length} / มีชีวิต ${allRats.length})</p>
-                    </div>
-                    <div class="bg-green-50 p-6 rounded-lg shadow"><h2 class="text-green-800 font-bold text-lg">รายงานการเจริญเติบโต</h2><p class="text-gray-500 mt-2">เร็วๆ นี้...</p></div>
-                    <div class="bg-yellow-50 p-6 rounded-lg shadow"><h2 class="text-yellow-800 font-bold text-lg">ประสิทธิภาพการผลิต</h2><p class="text-gray-500 mt-2">เร็วๆ นี้...</p></div>
-                </div>
-            </div>`;
-        }
-        
         function renderFatteningAnalytics(container) {
             if (!container) return;
             const totalPopulation = allRats.length + allDeaths.length;
