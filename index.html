@@ -67,7 +67,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- App ID ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -256,6 +256,56 @@
                 document.getElementById('confirm-modal').classList.add('hidden');
             }
         }
+
+        async function clearCrate() {
+            if (!currentRack || !currentShelf || !currentSide) {
+                showMessage("กรุณาเลือกตำแหน่งของกระบะก่อน", "warning");
+                return;
+            }
+            const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
+            if (crateRats.length === 0) {
+                showMessage("กระบะนี้ไม่มีหนู", "warning");
+                return;
+            }
+            const modal = document.getElementById('confirm-modal');
+            const modalMessage = document.getElementById('confirm-modal-message');
+            const confirmButton = document.getElementById('confirm-modal-confirm-btn');
+
+            modalMessage.textContent = `คุณแน่ใจหรือไม่ว่าต้องการลบหนูทั้งหมด ${crateRats.length} ตัวในกระบะ ${currentRack} / ชั้น ${currentShelf} / ${currentSide}?`;
+            confirmButton.dataset.action = 'clearCrate';
+            modal.classList.remove('hidden');
+        }
+
+        async function confirmClearCrate(button) {
+            button.disabled = true;
+            try {
+                const q = query(collection(db, `artifacts/${appId}/public/data/rats`), 
+                    where("rack", "==", currentRack), 
+                    where("shelf", "==", currentShelf), 
+                    where("side", "==", currentSide)
+                );
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) { 
+                    showMessage("ไม่พบหนูในกระบะที่เลือก", "warning"); 
+                    return; 
+                }
+
+                const batch = writeBatch(db);
+                querySnapshot.docs.forEach(d => {
+                    batch.delete(doc(db, `artifacts/${appId}/public/data/rats`, d.id));
+                });
+                await batch.commit();
+
+                showMessage(`ลบหนูทั้งหมดจากกระบะเรียบร้อยแล้ว`, "success");
+            } catch (e) { 
+                console.error("Error clearing crate:", e); 
+                showMessage("เกิดข้อผิดพลาดในการลบหนูทั้งหมด", "error");
+            } finally { 
+                button.disabled = false; 
+                document.getElementById('confirm-modal').classList.add('hidden');
+            }
+        }
+
 
         async function deleteClosestRat(button) {
             const weightInput = document.getElementById('delete-rat-weight-input');
@@ -639,6 +689,8 @@
                     const info = document.getElementById('action-modal-info');
                     if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
                     if (modal) modal.classList.remove('hidden');
+                } else if (id === 'open-clear-crate-btn') {
+                    clearCrate();
                 } else if (id === 'confirm-modal-confirm-btn') {
                     const action = button.dataset.action;
                     if (action === 'deleteRack') {
@@ -647,6 +699,8 @@
                         confirmDeleteOrder(button.dataset.orderId, button);
                     } else if (action === 'deleteRat') {
                          confirmDeleteRat(button);
+                    } else if (action === 'clearCrate') {
+                        confirmClearCrate(button);
                     }
                 }
             });
@@ -1009,6 +1063,7 @@
                 actionButtonHtml = `<div class="space-y-2 pt-2">
                     <button id="save-rat-btn" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700 transition" type="button">+ เพิ่มหนู</button>
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
+                    <button id="open-clear-crate-btn" class="w-full bg-gray-600 text-white p-3 rounded-lg font-bold hover:bg-gray-700 transition" type="button">Clear กระบะ</button>
                 </div>`;
             } else if (fatteningSubPage === 'order') {
                 // This section is now handled by renderFatteningOrderManager
