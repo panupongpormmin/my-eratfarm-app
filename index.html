@@ -177,6 +177,12 @@
         
         async function saveRat(button) {
             if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+            
+            const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
+            if (crateRats.length >= 40) {
+                return alert("กระบะเต็มแล้ว (สูงสุด 40 ตัว)");
+            }
+
             button.disabled = true;
             const ratData = { rack: currentRack, shelf: currentShelf, side: currentSide, size: currentSize, weight: parseFloat(currentWeight), createdAt: new Date().toISOString() };
             try { await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData); } catch(e) { console.error(e); } finally { button.disabled = false; }
@@ -185,6 +191,10 @@
         async function returnRatToCrate(button) {
             if (!currentRack || !currentShelf || !currentSide || !currentWeight) {
                 return alert("กรุณาเลือกตำแหน่งและกรอกน้ำหนักหนูที่จะส่งคืน");
+            }
+            const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
+            if (crateRats.length >= 40) {
+                return alert("กระบะเต็มแล้ว (สูงสุด 40 ตัว) ไม่สามารถส่งคืนได้");
             }
             button.disabled = true;
             try {
