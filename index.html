@@ -150,7 +150,7 @@
                 if (docSnap.exists()) {
                     farmConfig = docSnap.data();
                 } else {
-                    farmConfig = { rackCount: 6 };
+                    farmConfig = { rackCount: 6 }; // Fallback to default
                 }
                 updateDataDrivenUI();
             }));
@@ -468,7 +468,8 @@
                 const classList = button.classList;
                 const idParts = id.split('-');
 
-                if (id === 'google-signin-btn') signInWithGoogle();
+                if (id === 'add-rack-btn') addRack(button);
+                else if (id === 'google-signin-btn') signInWithGoogle();
                 else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
                     currentPage = idParts[1];
