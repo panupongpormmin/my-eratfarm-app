@@ -11,6 +11,46 @@
         .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
         button:disabled { cursor: not-allowed; opacity: 0.7; }
         .modal { transition: opacity 0.3s ease; }
+        /* God Mode Toggle CSS */
+        .god-mode-toggle {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .god-mode-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #ef4444; /* red-500 */
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4">
@@ -48,6 +88,7 @@
         let currentPage = 'main';
         let subPage = '';
         let fatteningSubPage = 'crate';
+        let godMode = false;
         let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
         let chartInstances = {};
         let unsubscribeListeners = [];
@@ -62,6 +103,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeFirebase();
             setupEventListeners();
+            godMode = localStorage.getItem('godMode') === 'true';
         });
 
         async function initializeFirebase() {
@@ -284,8 +326,10 @@
         }
 
         async function sendRatToOrder(button) {
-            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) {
-                return alert("กรุณากรอกข้อมูลหนูที่จะส่งให้ครบถ้วน");
+            let requiredFields = godMode ? ['currentSize', 'currentWeight'] : ['currentRack', 'currentShelf', 'currentSide', 'currentSize', 'currentWeight'];
+            let missingFields = requiredFields.filter(field => !eval(field));
+            if(missingFields.length > 0) {
+                 return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
             }
 
             let targetOrder = null;
@@ -310,35 +354,33 @@
             button.disabled = true;
 
             try {
-                const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
-                    where("rack", "==", currentRack),
-                    where("shelf", "==", currentShelf),
-                    where("side", "==", currentSide)
-                );
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) {
-                    alert("ไม่พบหนูในกระบะที่เลือก");
-                    button.disabled = false;
-                    return;
+                if (!godMode) {
+                    const q = query(collection(db, `artifacts/${appId}/public/data/rats`),
+                        where("rack", "==", currentRack), where("shelf", "==", currentShelf), where("side", "==", currentSide));
+                    const querySnapshot = await getDocs(q);
+                    if (querySnapshot.empty) {
+                        alert("ไม่พบหนูในกระบะที่เลือก");
+                        button.disabled = false; return;
+                    }
+
+                    const now = new Date();
+                    const weightToFind = parseFloat(currentWeight);
+                    const candidates = querySnapshot.docs.map(doc => {
+                        const rat = { id: doc.id, ...doc.data() };
+                        const daysAgo = (now - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
+                        const estimatedWeight = rat.weight + (daysAgo * 0.9);
+                        return { ...rat, estimatedWeight };
+                    });
+                    let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
+
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
                 }
-
-                const now = new Date();
-                const weightToFind = parseFloat(currentWeight);
-                const candidates = querySnapshot.docs.map(doc => {
-                    const rat = { id: doc.id, ...doc.data() };
-                    const daysAgo = (now - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
-                    const estimatedWeight = rat.weight + (daysAgo * 0.9);
-                    return { ...rat, estimatedWeight };
-                });
-                let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
-
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
-
+                
                 const updatedItems = [...targetOrder.items];
                 updatedItems[targetItemIndex].sent = (updatedItems[targetItemIndex].sent || 0) + 1;
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetOrder.id), { items: updatedItems });
 
-                alert(`ส่งหนู (น้ำหนักประมาณ ${closestRat.estimatedWeight.toFixed(1)}g) เข้า Order '${targetOrder.name}' เรียบร้อย`);
+                alert(`ส่งหนู 1 ตัวเข้า Order '${targetOrder.name}' เรียบร้อยแล้ว`);
             } catch (e) {
                 console.error("Error sending rat to order:", e);
                 alert("เกิดข้อผิดพลาดในการส่ง Order");
@@ -346,18 +388,6 @@
                 button.disabled = false;
                 document.getElementById('action-modal').classList.add('hidden');
             }
-        }
-        
-        async function sendQuickRatToOrder(orderId, itemIndex) {
-            const order = allOrders.find(o => o.id === orderId);
-            if (!order) return;
-            const updatedItems = [...order.items];
-            const item = updatedItems[itemIndex];
-            if (item.status !== 'pending') return alert("Order รายการนี้ถูกปิดไปแล้ว");
-            item.sent = (item.sent || 0) + 1;
-            try {
-                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
-            } catch (e) { console.error("Error sending quick rat:", e); }
         }
 
         async function markOrderItemStatus(orderId, itemIndex, status) {
@@ -414,7 +444,7 @@
                     }
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
-                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
+                else if (id === 'send-rat-btn') sendRatToOrder(button);
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
@@ -437,19 +467,26 @@
                     currentWeight = '';
                     renderFatteningOrderManager();
                 } else if (classList.contains('weight-selector-btn')) {
-                    if (!currentRack || !currentShelf || !currentSide) {
+                    if (!godMode && (!currentRack || !currentShelf || !currentSide)) {
                         return alert("กรุณาเลือกตำแหน่งของกระบะก่อน");
                     }
                     currentWeight = button.dataset.weight;
                     const modal = document.getElementById('action-modal');
                     const info = document.getElementById('action-modal-info');
-                    if (info) info.textContent = `ตำแหน่ง: ${currentRack}/${currentShelf}/${currentSide} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
+                    if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
                     if (modal) modal.classList.remove('hidden');
                 }
             });
             document.body.addEventListener('change', (e) => {
                 const target = e.target;
-                if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
+                if (target.id === 'god-mode-checkbox') {
+                    godMode = target.checked;
+                    localStorage.setItem('godMode', godMode);
+                    if (currentPage === 'department' && subPage === 'fattening' && fatteningSubPage === 'order') {
+                        renderFatteningOrderManager();
+                    }
+                }
+                else if (['rat-rack', 'rat-shelf', 'rat-side'].includes(target.id)) {
                     currentRack = document.getElementById('rat-rack')?.value || '';
                     currentShelf = document.getElementById('rat-shelf')?.value || '';
                     currentSide = document.getElementById('rat-side')?.value || '';
