@@ -286,10 +286,7 @@
             if (!currentRack || !currentShelf || !currentSide || !currentWeight) {
                 return alert("กรุณาเลือกตำแหน่งและกรอกน้ำหนักหนูที่จะส่งคืน");
             }
-            const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
-            if (crateRats.length >= 40) {
-                return alert("กระบะเต็มแล้ว (สูงสุด 40 ตัว) ไม่สามารถส่งคืนได้");
-            }
+            
             button.disabled = true;
             try {
                 const q = query(collection(db, `artifacts/${appId}/public/data/rats`), 
@@ -904,7 +901,10 @@
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
                 </div>`;
             } else if (fatteningSubPage === 'order') {
-                // This section is now handled by renderFatteningOrderManager
+                actionButtonHtml = `<div class="space-y-2 pt-2">
+                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
+                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
+                </div>`;
             }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
