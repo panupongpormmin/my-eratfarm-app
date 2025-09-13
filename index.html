@@ -277,6 +277,7 @@
                 alert("เกิดข้อผิดพลาดในการอัปเดตข้อมูลหนู");
             } finally {
                 button.disabled = false;
+                document.getElementById('action-modal').classList.add('hidden');
             }
         }
 
@@ -838,10 +839,7 @@
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
                 </div>`;
             } else if (fatteningSubPage === 'order') {
-                actionButtonHtml = `<div class="space-y-2 pt-2">
-                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
-                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
-                </div>`;
+                // This section is now replaced by renderFatteningOrderManager
             }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
@@ -853,6 +851,40 @@
                 <div class="${currentSize ? '' : 'hidden'}"><label class="block mb-1 font-semibold text-gray-700">น้ำหนัก</label><div class="grid grid-cols-5 gap-2">${weightRadios()}</div></div>
                 ${actionButtonHtml}
             </form>`;
+        }
+        function renderFatteningOrderManager() {
+            const container = document.getElementById('fattening-content-container');
+            if (!container) return;
+            const rackOptions = [...Array(6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
+            const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
+            const sideOptions = ['ซ้าย', 'ขวา'].map(s => `<option value="${s}" ${currentSide === s ? 'selected':''}>${s}</option>`).join('');
+            const sizeButtonsHtml = ratSizeOptions.map(opt => `<button class="size-selector-btn p-3 border-2 rounded-lg font-semibold ${currentSize === opt.size ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-300'}" data-size="${opt.size}">${opt.size}</button>`).join('');
+            let weightButtonsHtml = '';
+            const selectedSizeData = ratSizeOptions.find(s => s.size === currentSize);
+            if (selectedSizeData) {
+                weightButtonsHtml += `<h3 class="text-lg font-semibold text-gray-700 col-span-full">น้ำหนัก (กรัม)</h3>`;
+                for (let i = selectedSizeData.minWeight; i <= selectedSizeData.maxWeight; i++) {
+                    weightButtonsHtml += `<button class="weight-selector-btn p-3 border-2 rounded-lg font-semibold bg-white border-gray-300" data-weight="${i}">${i}</button>`;
+                }
+            }
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-end items-center gap-2">
+                        <span class="font-bold ${godMode ? 'text-red-500' : 'text-gray-600'}">God Mode</span>
+                        <label class="god-mode-toggle"><input type="checkbox" id="god-mode-checkbox" ${godMode ? 'checked' : ''}><span class="slider"></span></label>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg space-y-4 ${godMode ? 'hidden' : ''}">
+                        <h2 class="text-xl font-bold">1. เลือกตำแหน่งกระบะ</h2>
+                        <div><label class="block mb-1 font-semibold text-gray-700">Rack</label><select id="rat-rack" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${rackOptions}</select></div>
+                        <div><label class="block mb-1 font-semibold text-gray-700">ชั้น</label><select id="rat-shelf" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${shelfOptions}</select></div>
+                        <div><label class="block mb-1 font-semibold text-gray-700">กระบะ</label><select id="rat-side" class="w-full p-2 border rounded bg-white"><option value="">เลือก</option>${sideOptions}</select></div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+                        <h2 class="text-xl font-bold">2. เลือกไซส์และน้ำหนักหนู</h2>
+                        <div><h3 class="text-lg font-semibold text-gray-700 mb-2">ไซส์</h3><div class="grid grid-cols-4 gap-2">${sizeButtonsHtml}</div></div>
+                        <div id="weight-selection-container" class="grid grid-cols-5 gap-2 mt-4">${weightButtonsHtml}</div>
+                    </div>
+                </div>`;
         }
         function renderCrateSummary() {
             const container = document.getElementById('crate-summary-container');
@@ -911,6 +943,19 @@
                         <button type="button" class="close-modal-btn p-2 bg-gray-100 rounded">ยกเลิก</button>
                         <button id="confirm-delete-rat-btn" class="p-2 bg-red-500 text-white rounded">ยืนยันการลบ</button>
                     </div>
+                </div>
+            </div>`;
+        }
+        function renderActionModal() {
+             return `<div id="action-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
+                <div class="bg-white rounded-lg p-6 w-full max-w-sm animate-fade-in text-center space-y-4">
+                    <h2 class="text-2xl font-bold mb-4">เลือกการกระทำ</h2>
+                    <p id="action-modal-info" class="text-gray-600 mb-4"></p>
+                    <div class="space-y-3">
+                        <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
+                        ${!godMode ? `<button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>` : ''}
+                    </div>
+                     <div class="pt-4"><button type="button" class="close-modal-btn p-2 text-gray-500 hover:text-gray-800">ยกเลิก</button></div>
                 </div>
             </div>`;
         }
