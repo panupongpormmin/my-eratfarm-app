@@ -44,7 +44,7 @@
         // --- App State ---
         let app, db, auth;
         let currentUser = null, currentUserRole = null;
-        let allRats = [], allOrders = [], allUsers = [], allDeaths = [], allTasks = [];
+        let allRats = [], allOrders = [], allUsers = [], allDeaths = [];
         let currentPage = 'main';
         let subPage = '';
         let fatteningSubPage = 'crate';
@@ -94,7 +94,6 @@
                 orders: `artifacts/${appId}/public/data/orders`,
                 users: `artifacts/${appId}/public/data/user_roles`,
                 deaths: `artifacts/${appId}/public/data/deaths`,
-                tasks: `artifacts/${appId}/public/data/tasks`,
             };
             const addListener = (path, stateUpdater, onError) => {
                 unsubscribeListeners.push(onSnapshot(collection(db, path), 
@@ -105,7 +104,6 @@
             addListener(paths.rats, (data) => allRats = data, (err) => console.error("Rats Listener Error:", err));
             addListener(paths.orders, (data) => allOrders = data, (err) => console.error("Orders Listener Error:", err));
             addListener(paths.deaths, (data) => allDeaths = data, (err) => console.error("Deaths Listener Error:", err));
-            addListener(paths.tasks, (data) => allTasks = data, (err) => console.error("Tasks Listener Error:", err));
             
             if (currentUserRole === 'admin') {
                  addListener(paths.users, (data) => allUsers = data, (err) => console.error("Users Listener Error:", err));
@@ -119,7 +117,7 @@
 
         function resetAppState() {
             currentUser = null; currentUserRole = null;
-            allRats = []; allOrders = []; allUsers = []; allDeaths = []; allTasks = [];
+            allRats = []; allOrders = []; allUsers = []; allDeaths = [];
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
             currentRack = ''; currentShelf = ''; currentSide = ''; currentSize = ''; currentWeight = '';
         }
@@ -147,53 +145,17 @@
         }
         
         // --- Logic Functions ---
-        async function saveTask(button) {
-            const input = document.getElementById('new-task-input');
-            const taskText = input.value.trim();
-            if (!taskText) return alert("กรุณาป้อนข้อความงาน");
-            
-            button.disabled = true;
-            const taskData = {
-                text: taskText,
-                status: 'pending',
-                createdBy: currentUser.displayName,
-                createdAt: serverTimestamp()
-            };
-            try {
-                await addDoc(collection(db, `artifacts/${appId}/public/data/tasks`), taskData);
-                input.value = '';
-            } catch (e) {
-                console.error("Error saving task:", e);
-            } finally {
-                button.disabled = false;
-            }
-        }
-
-        async function updateTaskStatus(taskId, newStatus) {
-            try {
-                await updateDoc(doc(db, `artifacts/${appId}/public/data/tasks`, taskId), { status: newStatus });
-            } catch (e) {
-                console.error("Error updating task status:", e);
-            }
-        }
-        
         async function deleteClosestRat(button) {
             const weightInput = document.getElementById('delete-rat-weight-input');
             const targetWeight = parseFloat(weightInput.value);
-
-            if (!targetWeight || isNaN(targetWeight) || targetWeight <= 0) {
-                return alert("กรุณากรอกน้ำหนักให้ถูกต้อง");
-            }
-            
-            if (!currentRack || !currentShelf || !currentSide) {
-                return alert("เกิดข้อผิดพลาด: ไม่พบตำแหน่งกระบะ");
-            }
+            if (!targetWeight || isNaN(targetWeight) || targetWeight <= 0) return alert("กรุณากรอกน้ำหนักให้ถูกต้อง");
+            if (!currentRack || !currentShelf || !currentSide) return alert("เกิดข้อผิดพลาด: ไม่พบตำแหน่งกระบะ");
 
             button.disabled = true;
             try {
                 const q = query(collection(db, `artifacts/${appId}/public/data/rats`), where("rack", "==", currentRack), where("shelf", "==", currentShelf), where("side", "==", currentSide));
                 const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) { alert("ไม่พบหนูในกระบะที่เลือก"); button.disabled = false; return; }
+                if (querySnapshot.empty) { alert("ไม่พบหนูในกระบะที่เลือก"); return; }
 
                 const candidates = querySnapshot.docs.map(d => {
                     const ratData = d.data();
@@ -210,24 +172,14 @@
                     alert(`บันทึกการตายและลบหนูเรียบร้อยแล้ว`);
                     document.getElementById('delete-rat-modal').classList.add('hidden');
                 }
-            } catch (e) {
-                console.error("Error in delete process:", e);
-            } finally { button.disabled = false; }
+            } catch (e) { console.error("Error deleting rat:", e); } finally { button.disabled = false; }
         }
         
         async function saveRat(button) {
-            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) {
-                return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
-            }
+            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
             button.disabled = true;
-            const ratData = {
-                rack: currentRack, shelf: currentShelf, side: currentSide,
-                size: currentSize, weight: parseFloat(currentWeight),
-                createdAt: new Date().toISOString()
-            };
-            try {
-                await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData);
-            } catch(e) { console.error(e); } finally { button.disabled = false; }
+            const ratData = { rack: currentRack, shelf: currentShelf, side: currentSide, size: currentSize, weight: parseFloat(currentWeight), createdAt: new Date().toISOString() };
+            try { await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData); } catch(e) { console.error(e); } finally { button.disabled = false; }
         }
 
         async function returnRatToCrate(button) {
@@ -279,6 +231,12 @@
         async function saveOrder(button) {
              button.disabled = true;
              const orderName = document.getElementById('order-name-input').value || 'New Order';
+             const department = document.getElementById('department-select').value;
+             if (!department) {
+                 alert("กรุณาเลือกแผนกที่จะส่ง Order ไปให้");
+                 button.disabled = false;
+                 return;
+             }
              const items = [];
              document.querySelectorAll('#order-items-container .order-item-row').forEach(row => {
                  const size = row.querySelector('.size-select').value;
@@ -289,9 +247,14 @@
              });
              if (items.length > 0) {
                  try {
-                     await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), { name: orderName, items, createdAt: new Date().toISOString() });
+                     await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), { 
+                         name: orderName, 
+                         department: department, 
+                         items, 
+                         createdAt: serverTimestamp() 
+                     });
                      document.getElementById('add-order-modal').classList.add('hidden');
-                 } catch (e) { console.error(e); }
+                 } catch (e) { console.error("Error saving order:", e); }
              }
              button.disabled = false;
         }
@@ -438,8 +401,7 @@
                     document.getElementById('delete-rat-modal').classList.remove('hidden');
                 }
                 else if (id === 'confirm-delete-rat-btn') deleteClosestRat(button);
-                else if (id === 'save-task-btn') saveTask(button);
-                else if (classList.contains('mark-task-complete-btn')) updateTaskStatus(button.dataset.taskId, 'completed');
+                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
                 else if (id === 'open-add-order-modal') document.getElementById('add-order-modal').classList.remove('hidden');
                 else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (classList.contains('remove-item-btn')) button.closest('.order-item-row').remove();
@@ -471,14 +433,11 @@
         function updateDataDrivenUI() {
             const pageRenderers = {
                 'dashboard': renderDashboardPage, 'main': renderMainPage,
-                'department': renderDepartmentPage, 'order': renderOrderPage, 
-                'admin': renderAdminPage, 'analytics': renderAnalyticsPage, 'tasks': renderTasksPage
+                'department': renderDepartmentPage, 'ordertasks': renderOrderTasksPage, 
+                'admin': renderAdminPage, 'analytics': renderAnalyticsPage
             };
-            if (pageRenderers[currentPage]) {
-                pageRenderers[currentPage]();
-            } else {
-                renderMainPage();
-            }
+            if (pageRenderers[currentPage]) pageRenderers[currentPage]();
+            else renderMainPage();
         }
 
         function renderLoadingUI(message) {
@@ -528,9 +487,8 @@
                 { id: 'dashboard', label: 'Dashboard', roles: ['admin', 'ceo'] },
                 { id: 'main', label: 'หน้าหลัก', roles: ['admin', 'ceo', 'officer', 'fattening_staff', 'user'] },
                 { id: 'department', label: 'แผนก', roles: ['admin', 'fattening_staff'] },
-                { id: 'order', label: 'Order', roles: ['admin', 'officer'] },
+                { id: 'ordertasks', label: 'Order / งาน', roles: ['admin', 'officer', 'fattening_staff'] },
                 { id: 'analytics', label: 'Analytics', roles: ['admin', 'ceo'] },
-                { id: 'tasks', label: 'แจ้งเตือน/งาน', roles: ['admin', 'ceo', 'officer', 'fattening_staff'] },
                 { id: 'admin', label: 'Admin', roles: ['admin'] }
              ];
 
@@ -635,45 +593,79 @@
             </div>`;
         }
 
-        function renderOrderPage() {
+        function renderOrderTasksPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
-            const sortedOrders = [...allOrders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-            const orderListHtml = sortedOrders.map((order) => {
-                const itemsHtml = (order.items || []).map((item, itemIndex) => {
-                    const sent = item.sent || 0;
-                    const quantity = item.quantity;
-                    const progress = quantity > 0 ? (sent / quantity) * 100 : 0;
-                    const isComplete = sent >= quantity;
-                    let statusHtml = '';
-                    if (['admin', 'officer'].includes(currentUserRole) && item.status === 'pending' && isComplete) {
-                        statusHtml = `<div class="mt-2 flex gap-2">
-                            <button class="mark-order-success w-full bg-green-500 text-white py-1 rounded text-sm hover:bg-green-600" data-order-id="${order.id}" data-item-index="${itemIndex}">สำเร็จ</button>
-                            <button class="mark-order-fail w-full bg-red-500 text-white py-1 rounded text-sm hover:bg-red-600" data-order-id="${order.id}" data-item-index="${itemIndex}">ไม่สำเร็จ</button>
-                        </div>`;
-                    } else if (item.status && item.status !== 'pending') {
-                        statusHtml = `<p class="mt-2 text-center font-semibold ${item.status === 'completed' ? 'text-green-600' : 'text-red-600'}">ตรวจสอบแล้ว: ${item.status === 'completed' ? 'สำเร็จ' : 'มีปัญหา'}</p>`;
-                    }
-                    return `<div class="border-t pt-2 mt-2">
-                        <div class="flex justify-between"><span>ไซส์ ${item.size}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>
-                        ${statusHtml}
-                    </div>`;
+            if (['admin', 'officer'].includes(currentUserRole)) {
+                renderOrderTasksForOfficer(pageContent);
+            } else if (['fattening_staff'].includes(currentUserRole)) {
+                renderOrderTasksForStaff(pageContent, 'fattening');
+            } else {
+                pageContent.innerHTML = '<p>คุณไม่มีสิทธิ์ดูหน้านี้</p>';
+            }
+        }
+
+        function renderOrderTasksForOfficer(container) {
+            const sortedOrders = [...allOrders].sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+            const departmentSections = {
+                fattening: { title: 'แผนกขุน', orders: [] },
+                breeding: { title: 'แผนกพ่อแม่พันธุ์', orders: [] }
+            };
+            sortedOrders.forEach(order => {
+                if (order.department && departmentSections[order.department]) {
+                    departmentSections[order.department].orders.push(order);
+                }
+            });
+            const renderSection = (dept) => {
+                if (dept.orders.length === 0) return '';
+                const orderListHtml = dept.orders.map(order => {
+                    const itemsHtml = (order.items || []).map((item, itemIndex) => { 
+                        const sent = item.sent || 0;
+                        const quantity = item.quantity;
+                        const progress = quantity > 0 ? (sent / quantity) * 100 : 0;
+                        const isComplete = sent >= quantity;
+                        let statusHtml = '';
+                        if (item.status === 'pending' && isComplete) {
+                            statusHtml = `<div class="mt-2 flex gap-2"><button class="mark-order-success w-full bg-green-500 text-white py-1 rounded text-sm hover:bg-green-600" data-order-id="${order.id}" data-item-index="${itemIndex}">สำเร็จ</button><button class="mark-order-fail w-full bg-red-500 text-white py-1 rounded text-sm hover:bg-red-600" data-order-id="${order.id}" data-item-index="${itemIndex}">ไม่สำเร็จ</button></div>`;
+                        } else if (item.status !== 'pending') {
+                            statusHtml = `<p class="mt-2 text-center font-semibold ${item.status === 'completed' ? 'text-green-600' : 'text-red-600'}">ตรวจสอบแล้ว: ${item.status === 'completed' ? 'สำเร็จ' : 'มีปัญหา'}</p>`;
+                        }
+                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>${statusHtml}</div>`;
+                    }).join('');
+                    return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name}</h3><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div><div class="mt-2">${itemsHtml}</div></div>`;
                 }).join('');
-                return `<div class="bg-white p-4 rounded-lg shadow">
-                    <div class="flex justify-between items-start">
-                        <h3 class="font-bold text-lg">${order.name}</h3>
-                        ${currentUserRole === 'admin' ? `<button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button>` : ''}
-                    </div>
-                    <div class="mt-2">${itemsHtml}</div>
-                </div>`;
-            }).join('') || '<p class="text-center text-gray-500">ยังไม่มี Order</p>';
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
-                <div class="flex justify-between items-center">
-                    <h1 class="text-2xl font-bold">รายการ Order</h1>
-                    ${currentUserRole === 'admin' ? '<button id="open-add-order-modal" class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-600">+ เพิ่ม Order</button>' : ''}
-                </div>
-                <div class="space-y-4">${orderListHtml}</div>
+                return `<div class="mt-6"><h2 class="text-xl font-bold mb-3">${dept.title}</h2><div class="space-y-4">${orderListHtml}</div></div>`;
+            };
+            container.innerHTML = `<div class="animate-fade-in space-y-6">
+                <div class="flex justify-between items-center"><h1 class="text-2xl font-bold">รายการ Order / งาน</h1><button id="open-add-order-modal" class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-600">+ เพิ่ม Order</button></div>
+                ${renderSection(departmentSections.fattening)}
+                ${renderSection(departmentSections.breeding)}
+            </div>`;
+        }
+
+        function renderOrderTasksForStaff(container, department) {
+            let allActiveItems = [];
+            allOrders.forEach(order => {
+                if (order.department === department) {
+                    (order.items || []).forEach((item, index) => {
+                        if (item.status === 'pending') {
+                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index });
+                        }
+                    });
+                }
+            });
+            if (allActiveItems.length === 0) {
+                container.innerHTML = '<div class="text-center p-8 text-gray-500">ไม่มี Order ที่ต้องจัดส่งในขณะนี้</div>'; return;
+            }
+            const itemsHtml = allActiveItems.map(item => `
+                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
+                    <div><p class="font-semibold">ไซส์ ${item.size}</p><p class="text-sm text-gray-500">${item.orderName}</p></div>
+                    <div class="text-right"><p class="font-bold text-lg">${item.sent || 0} / ${item.quantity}</p></div>
+                    <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
+                </div>`).join('');
+            container.innerHTML = `<div class="animate-fade-in space-y-6">
+                <h1 class="text-2xl font-bold">Order ที่ต้องจัดส่ง (แผนกของคุณ)</h1>
+                <div class="space-y-3">${itemsHtml}</div>
             </div>`;
         }
         
@@ -700,6 +692,7 @@
                  <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2">${activeOrdersHtml}</div>
             </div>`;
         }
+
 
         function renderAdminPage() {
             const pageContent = document.getElementById('page-content');
@@ -742,41 +735,8 @@
         }
         
         function renderTasksPage() {
-            const pageContent = document.getElementById('page-content');
-            if (!pageContent) return;
-            const canAssignTasks = ['admin', 'officer'].includes(currentUserRole);
-            const canCompleteTasks = ['fattening_staff'].includes(currentUserRole);
-            const taskInputHtml = canAssignTasks ? `<div class="bg-white p-4 rounded-lg shadow">
-                    <h2 class="font-bold text-lg mb-2">มอบหมายงานใหม่</h2>
-                    <div class="flex gap-2">
-                        <input type="text" id="new-task-input" class="w-full p-2 border rounded" placeholder="พิมพ์ข้อความงาน...">
-                        <button id="save-task-btn" class="bg-blue-500 text-white px-4 py-2 rounded font-semibold">มอบหมาย</button>
-                    </div>
-                </div>` : '';
-            const pendingTasks = allTasks.filter(t => t.status === 'pending');
-            const completedTasks = allTasks.filter(t => t.status === 'completed');
-            const renderTaskList = (tasks, title, isPending) => {
-                if (tasks.length === 0) return `<div class="mt-4"><h3 class="font-bold mb-2">${title}</h3><p class="text-gray-500">ไม่มีรายการ</p></div>`;
-                return `<div class="mt-4">
-                    <h3 class="font-bold mb-2">${title}</h3>
-                    <div class="space-y-2">
-                        ${tasks.map(task => `
-                            <div class="bg-gray-100 p-3 rounded flex justify-between items-center ${!isPending ? 'opacity-60' : ''}">
-                                <div>
-                                    <p class="${!isPending ? 'line-through' : ''}">${task.text}</p>
-                                    <p class="text-xs text-gray-500">โดย: ${task.createdBy} - ${task.createdAt ? new Date(task.createdAt.seconds * 1000).toLocaleDateString('th-TH') : ''}</p>
-                                </div>
-                                ${isPending && canCompleteTasks ? `<button class="mark-task-complete-btn bg-green-500 text-white px-3 py-1 text-sm rounded" data-task-id="${task.id}">ทำเสร็จแล้ว</button>` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>`;
-            };
-            pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
-                <h1 class="text-2xl font-bold">แจ้งเตือน / งาน</h1>
-                ${taskInputHtml}
-                <div class="bg-gray-50 p-4 rounded-lg">${renderTaskList(pendingTasks, 'งานที่ต้องทำ', true)}${renderTaskList(completedTasks, 'งานที่เสร็จสิ้นแล้ว', false)}</div>
-            </div>`;
+            // This function is now OBSOLETE as it's merged into renderOrderTasksPage
+            renderOrderTasksPage();
         }
 
         // --- UI Components ---
@@ -837,12 +797,20 @@
                     <h2 class="text-2xl font-bold mb-4">สร้าง Order ใหม่</h2>
                     <form id="add-order-form" class="space-y-4">
                         <div><label for="order-name-input" class="block mb-1">ชื่อ Order</label><input type="text" id="order-name-input" class="w-full p-2 border rounded" value="Order ${new Date().toLocaleDateString('th-TH')}"></div>
+                        <div>
+                            <label for="department-select" class="block mb-1">ส่งให้แผนก</label>
+                            <select id="department-select" class="w-full p-2 border rounded bg-white">
+                                <option value="">-- เลือกแผนก --</option>
+                                <option value="fattening">แผนกขุน</option>
+                                <option value="breeding">แผนกพ่อแม่พันธุ์</option>
+                            </select>
+                        </div>
                         <div id="order-items-container" class="space-y-2 max-h-60 overflow-y-auto p-1"></div>
                         <button type="button" id="add-order-item-btn" class="w-full p-2 bg-gray-200 rounded hover:bg-gray-300">+ เพิ่มรายการ</button>
                     </form>
                     <div class="flex justify-end space-x-2 mt-6">
                         <button type="button" class="close-modal-btn p-2 bg-gray-100 rounded">ยกเลิก</button>
-                        <button id="save-order-btn" class="p-2 bg-blue-500 text-white rounded">บันทึก</button>
+                        <button id="save-order-btn" class="p-2 bg-blue-500 text-white rounded">บันทึกและส่งงาน</button>
                     </div>
                 </div>
             </div>`;
