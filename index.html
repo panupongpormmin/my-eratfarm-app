@@ -215,6 +215,29 @@
                 button.disabled = false;
             }
         }
+        
+        async function deleteRack(button) {
+            if (currentUserRole !== 'admin') return;
+            const currentRackCount = farmConfig.rackCount || 6;
+            if (currentRackCount <= 1) {
+                return alert("ไม่สามารถลบ Rack ได้อีกแล้ว (ต้องมีอย่างน้อย 1 Rack)");
+            }
+            if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Rack ${currentRackCount}? การกระทำนี้ไม่สามารถย้อนกลับได้`)) {
+                return;
+            }
+            button.disabled = true;
+            const configRef = doc(db, `artifacts/${appId}/public/data/farm_config`, 'main');
+            try {
+                const newRackCount = currentRackCount - 1;
+                await setDoc(configRef, { rackCount: newRackCount }, { merge: true });
+                alert(`ลบ Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`);
+            } catch (e) {
+                console.error("Error deleting rack:", e);
+                alert("เกิดข้อผิดพลาดในการลบ Rack");
+            } finally {
+                button.disabled = false;
+            }
+        }
 
         async function deleteClosestRat(button) {
             const weightInput = document.getElementById('delete-rat-weight-input');
@@ -469,6 +492,7 @@
                 const idParts = id.split('-');
 
                 if (id === 'add-rack-btn') addRack(button);
+                else if (id === 'delete-rack-btn') deleteRack(button);
                 else if (id === 'google-signin-btn') signInWithGoogle();
                 else if (id === 'signout-btn') signOutUser();
                 else if (id.startsWith('nav-')) {
@@ -827,7 +851,10 @@
                 <div class="bg-gray-50 p-6 rounded-lg shadow-sm mt-6">
                     <h2 class="text-xl font-semibold text-gray-700 mb-4">จัดการ Rack</h2>
                     <p class="mb-2">จำนวน Rack ปัจจุบัน: <span class="font-bold">${farmConfig.rackCount || 6}</span></p>
-                    <button id="add-rack-btn" class="bg-green-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-green-600 transition">+ เพิ่ม Rack 1 อัน</button>
+                    <div class="flex space-x-2">
+                        <button id="add-rack-btn" class="bg-green-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-green-600 transition">+ เพิ่ม Rack 1 อัน</button>
+                        <button id="delete-rack-btn" class="bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-red-600 transition">- ลบ RACK 1 อัน</button>
+                    </div>
                 </div>
             `;
             pageContent.innerHTML = `<div class="animate-fade-in space-y-4">
@@ -877,10 +904,7 @@
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
                 </div>`;
             } else if (fatteningSubPage === 'order') {
-                actionButtonHtml = `<div class="space-y-2 pt-2">
-                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
-                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
-                </div>`;
+                // This section is now handled by renderFatteningOrderManager
             }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
