@@ -62,6 +62,7 @@
         </div>
     </div>
     <div id="modal-container"></div>
+    <div id="message-box" class="fixed top-4 right-4 z-50"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -69,7 +70,7 @@
         import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, query, where, getDocs, updateDoc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- App ID ---
-        const appId = 'default-app-id';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         const firebaseConfig = {
             apiKey: "AIzaSyAkCMLbcWCT9jhkRVU2bhVMjdWaeuMm1vo",
@@ -201,55 +202,93 @@
         
         // --- Logic Functions ---
         async function addRack(button) {
-            if (currentUserRole !== 'admin') return;
+            if (currentUserRole !== 'admin') {
+                showMessage("คุณไม่มีสิทธิ์ในการเพิ่ม Rack", "error");
+                return;
+            }
             button.disabled = true;
             const configRef = doc(db, `artifacts/${appId}/public/data/farm_config`, 'main');
             try {
                 const newRackCount = (farmConfig.rackCount || 6) + 1;
                 await setDoc(configRef, { rackCount: newRackCount }, { merge: true });
-                alert(`เพิ่ม Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`);
+                showMessage(`เพิ่ม Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`, "success");
             } catch (e) {
                 console.error("Error adding rack:", e);
-                alert("เกิดข้อผิดพลาดในการเพิ่ม Rack");
+                showMessage("เกิดข้อผิดพลาดในการเพิ่ม Rack: " + e.message, "error");
             } finally {
                 button.disabled = false;
             }
         }
         
         async function deleteRack(button) {
-            if (currentUserRole !== 'admin') return;
-            const currentRackCount = farmConfig.rackCount || 6;
-            if (currentRackCount <= 1) {
-                return alert("ไม่สามารถลบ Rack ได้อีกแล้ว (ต้องมีอย่างน้อย 1 Rack)");
-            }
-            if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Rack ${currentRackCount}? การกระทำนี้ไม่สามารถย้อนกลับได้`)) {
+            if (currentUserRole !== 'admin') {
+                showMessage("คุณไม่มีสิทธิ์ในการลบ Rack", "error");
                 return;
             }
+            const currentRackCount = farmConfig.rackCount || 6;
+            if (currentRackCount <= 1) {
+                showMessage("ไม่สามารถลบ Rack ได้อีกแล้ว (ต้องมีอย่างน้อย 1 Rack)", "error");
+                return;
+            }
+
+            const modal = document.getElementById('confirm-modal');
+            const modalMessage = document.getElementById('confirm-modal-message');
+            const confirmButton = document.getElementById('confirm-modal-confirm-btn');
+
+            modalMessage.textContent = `คุณแน่ใจหรือไม่ว่าต้องการลบ Rack ${currentRackCount}? การกระทำนี้ไม่สามารถย้อนกลับได้`;
+            confirmButton.dataset.action = 'deleteRack';
+            confirmButton.dataset.rackCount = currentRackCount;
+            modal.classList.remove('hidden');
+        }
+
+        async function confirmDeleteRack(rackCount, button) {
             button.disabled = true;
             const configRef = doc(db, `artifacts/${appId}/public/data/farm_config`, 'main');
             try {
-                const newRackCount = currentRackCount - 1;
+                const newRackCount = parseInt(rackCount, 10) - 1;
                 await setDoc(configRef, { rackCount: newRackCount }, { merge: true });
-                alert(`ลบ Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`);
+                showMessage(`ลบ Rack เรียบร้อยแล้ว! จำนวน Rack ปัจจุบันคือ ${newRackCount}`, "success");
             } catch (e) {
                 console.error("Error deleting rack:", e);
-                alert("เกิดข้อผิดพลาดในการลบ Rack");
+                showMessage("เกิดข้อผิดพลาดในการลบ Rack: " + e.message, "error");
             } finally {
                 button.disabled = false;
+                document.getElementById('confirm-modal').classList.add('hidden');
             }
         }
 
         async function deleteClosestRat(button) {
             const weightInput = document.getElementById('delete-rat-weight-input');
             const targetWeight = parseFloat(weightInput.value);
-            if (!targetWeight || isNaN(targetWeight) || targetWeight <= 0) return alert("กรุณากรอกน้ำหนักให้ถูกต้อง");
-            if (!currentRack || !currentShelf || !currentSide) return alert("เกิดข้อผิดพลาด: ไม่พบตำแหน่งกระบะ");
+            if (!targetWeight || isNaN(targetWeight) || targetWeight <= 0) {
+                showMessage("กรุณากรอกน้ำหนักให้ถูกต้อง", "error");
+                return;
+            }
+            if (!currentRack || !currentShelf || !currentSide) {
+                showMessage("เกิดข้อผิดพลาด: ไม่พบตำแหน่งกระบะ", "error");
+                return;
+            }
+            
+            const modal = document.getElementById('confirm-modal');
+            const modalMessage = document.getElementById('confirm-modal-message');
+            const confirmButton = document.getElementById('confirm-modal-confirm-btn');
 
+            modalMessage.textContent = `คุณแน่ใจหรือไม่ว่าต้องการลบหนูตัวนี้?`;
+            confirmButton.dataset.action = 'deleteRat';
+            modal.classList.remove('hidden');
+        }
+
+        async function confirmDeleteRat(button) {
+            const weightInput = document.getElementById('delete-rat-weight-input');
+            const targetWeight = parseFloat(weightInput.value);
             button.disabled = true;
             try {
                 const q = query(collection(db, `artifacts/${appId}/public/data/rats`), where("rack", "==", currentRack), where("shelf", "==", currentShelf), where("side", "==", currentSide));
                 const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) { alert("ไม่พบหนูในกระบะที่เลือก"); return; }
+                if (querySnapshot.empty) { 
+                    showMessage("ไม่พบหนูในกระบะที่เลือก", "warning"); 
+                    return; 
+                }
 
                 const candidates = querySnapshot.docs.map(d => {
                     const ratData = d.data();
@@ -258,35 +297,56 @@
                 });
                 let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - targetWeight) < Math.abs(prev.estimatedWeight - targetWeight) ? curr : prev));
                 
-                if (confirm(`ระบบพบหนูที่มีน้ำหนักใกล้เคียงที่สุดคือ ${closestRat.estimatedWeight.toFixed(1)}g.\nคุณต้องการลบหนูตัวนี้ใช่หรือไม่?`)) {
-                    const deathData = { ...closestRat, deathDate: serverTimestamp(), department: 'fattening' };
-                    delete deathData.estimatedWeight; 
-                    await addDoc(collection(db, `artifacts/${appId}/public/data/deaths`), deathData);
-                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
-                    alert(`บันทึกการตายและลบหนูเรียบร้อยแล้ว`);
-                    document.getElementById('delete-rat-modal').classList.add('hidden');
-                }
-            } catch (e) { console.error("Error deleting rat:", e); } finally { button.disabled = false; }
+                const deathData = { ...closestRat, deathDate: serverTimestamp(), department: 'fattening' };
+                delete deathData.estimatedWeight; 
+                await addDoc(collection(db, `artifacts/${appId}/public/data/deaths`), deathData);
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
+                showMessage(`บันทึกการตายและลบหนูเรียบร้อยแล้ว`, "success");
+                document.getElementById('delete-rat-modal').classList.add('hidden');
+            } catch (e) { 
+                console.error("Error deleting rat:", e); 
+                showMessage("เกิดข้อผิดพลาดในการลบหนู", "error");
+            } finally { 
+                button.disabled = false; 
+                document.getElementById('confirm-modal').classList.add('hidden');
+            }
         }
         
         async function saveRat(button) {
-            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+            if (!currentRack || !currentShelf || !currentSide || !currentSize || !currentWeight) {
+                showMessage("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
+                return;
+            }
             
             const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
             if (crateRats.length >= 40) {
-                return alert("กระบะเต็มแล้ว (สูงสุด 40 ตัว)");
+                showMessage("กระบะเต็มแล้ว (สูงสุด 40 ตัว)", "warning");
+                return;
             }
 
             button.disabled = true;
             const ratData = { rack: currentRack, shelf: currentShelf, side: currentSide, size: currentSize, weight: parseFloat(currentWeight), createdAt: new Date().toISOString() };
-            try { await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData); } catch(e) { console.error(e); } finally { button.disabled = false; }
+            try { 
+                await addDoc(collection(db, `artifacts/${appId}/public/data/rats`), ratData); 
+                showMessage("เพิ่มหนูสำเร็จ!", "success");
+            } catch(e) { 
+                console.error(e); 
+                showMessage("เกิดข้อผิดพลาดในการเพิ่มหนู", "error");
+            } finally { 
+                button.disabled = false; 
+            }
         }
 
         async function returnRatToCrate(button) {
             if (!currentRack || !currentShelf || !currentSide || !currentWeight) {
-                return alert("กรุณาเลือกตำแหน่งและกรอกน้ำหนักหนูที่จะส่งคืน");
+                showMessage("กรุณาเลือกตำแหน่งและกรอกน้ำหนักหนูที่จะส่งคืน", "error");
+                return;
             }
-            
+            const crateRats = allRats.filter(r => r.rack === currentRack && r.shelf == currentShelf && r.side === currentSide);
+            if (crateRats.length >= 40) {
+                showMessage("กระบะเต็มแล้ว (สูงสุด 40 ตัว) ไม่สามารถส่งคืนได้", "warning");
+                return;
+            }
             button.disabled = true;
             try {
                 const q = query(collection(db, `artifacts/${appId}/public/data/rats`), 
@@ -296,7 +356,7 @@
                 );
                 const querySnapshot = await getDocs(q);
                 if (querySnapshot.empty) {
-                    alert("ไม่พบหนูในกระบะที่เลือก");
+                    showMessage("ไม่พบหนูในกระบะที่เลือก", "warning");
                     button.disabled = false;
                     return;
                 }
@@ -319,11 +379,11 @@
                     createdAt: new Date().toISOString()
                 });
 
-                alert(`อัปเดตน้ำหนักหนู (น้ำหนักประมาณ ${closestRat.estimatedWeight.toFixed(1)}g) เป็น ${weightToUpdate}g เรียบร้อยแล้ว`);
+                showMessage(`อัปเดตน้ำหนักหนู (น้ำหนักประมาณ ${closestRat.estimatedWeight.toFixed(1)}g) เป็น ${weightToUpdate}g เรียบร้อยแล้ว`, "success");
 
             } catch (e) {
                 console.error("Error returning rat to crate:", e);
-                alert("เกิดข้อผิดพลาดในการอัปเดตข้อมูลหนู");
+                showMessage("เกิดข้อผิดพลาดในการอัปเดตข้อมูลหนู", "error");
             } finally {
                 button.disabled = false;
                 document.getElementById('action-modal').classList.add('hidden');
@@ -335,7 +395,7 @@
              const orderName = document.getElementById('order-name-input').value || 'New Order';
              const department = document.getElementById('department-select').value;
              if (!department) {
-                 alert("กรุณาเลือกแผนกที่จะส่ง Order ไปให้");
+                 showMessage("กรุณาเลือกแผนกที่จะส่ง Order ไปให้", "error");
                  button.disabled = false;
                  return;
              }
@@ -356,36 +416,62 @@
                          createdAt: serverTimestamp() 
                      });
                      document.getElementById('add-order-modal').classList.add('hidden');
-                 } catch (e) { console.error("Error saving order:", e); }
+                     showMessage("บันทึก Order สำเร็จ", "success");
+                 } catch (e) { 
+                     console.error("Error saving order:", e); 
+                     showMessage("เกิดข้อผิดพลาดในการบันทึก Order", "error");
+                 }
              }
              button.disabled = false;
         }
 
         async function deleteOrder(orderId) {
-            if(confirm('คุณต้องการลบ Order นี้ใช่หรือไม่?')) {
-                try {
-                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId));
-                } catch(e) { console.error(e); }
+            const modal = document.getElementById('confirm-modal');
+            const modalMessage = document.getElementById('confirm-modal-message');
+            const confirmButton = document.getElementById('confirm-modal-confirm-btn');
+
+            modalMessage.textContent = 'คุณต้องการลบ Order นี้ใช่หรือไม่?';
+            confirmButton.dataset.action = 'deleteOrder';
+            confirmButton.dataset.orderId = orderId;
+            modal.classList.remove('hidden');
+        }
+
+        async function confirmDeleteOrder(orderId, button) {
+            button.disabled = true;
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId));
+                showMessage("ลบ Order สำเร็จ", "success");
+            } catch(e) { 
+                console.error(e); 
+                showMessage("เกิดข้อผิดพลาดในการลบ Order", "error");
+            } finally {
+                button.disabled = false;
+                document.getElementById('confirm-modal').classList.add('hidden');
             }
         }
 
         async function updateUserRole(userId, newRole) {
              try {
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/user_roles`, userId), { role: newRole });
-             } catch(e) { console.error(e); }
+                showMessage("อัปเดตสิทธิ์ผู้ใช้สำเร็จ", "success");
+             } catch(e) { 
+                 console.error(e); 
+                 showMessage("เกิดข้อผิดพลาดในการอัปเดตสิทธิ์ผู้ใช้", "error");
+             }
         }
 
         async function sendRatToOrder(button) {
             let requiredFields = godMode ? ['currentSize', 'currentWeight'] : ['currentRack', 'currentShelf', 'currentSide', 'currentSize', 'currentWeight'];
             let missingFields = requiredFields.filter(field => !eval(field));
             if(missingFields.length > 0) {
-                 return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+                 showMessage("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
+                 return;
             }
 
             let targetOrder = null;
             let targetItemIndex = -1;
 
-            const sortedOrders = [...allOrders].sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+            const sortedOrders = [...allOrders].sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
             for (const order of sortedOrders) {
                 const index = (order.items || []).findIndex(item =>
                     item.size === currentSize && item.status === 'pending'
@@ -398,7 +484,8 @@
             }
 
             if (!targetOrder) {
-                return alert(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ถูกปิดไปแล้ว`);
+                showMessage(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ถูกปิดไปแล้ว`, "warning");
+                return;
             }
 
             button.disabled = true;
@@ -409,7 +496,7 @@
                         where("rack", "==", currentRack), where("shelf", "==", currentShelf), where("side", "==", currentSide));
                     const querySnapshot = await getDocs(q);
                     if (querySnapshot.empty) {
-                        alert("ไม่พบหนูในกระบะที่เลือก");
+                        showMessage("ไม่พบหนูในกระบะที่เลือก", "warning");
                         button.disabled = false; return;
                     }
 
@@ -430,10 +517,10 @@
                 updatedItems[targetItemIndex].sent = (updatedItems[targetItemIndex].sent || 0) + 1;
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetOrder.id), { items: updatedItems });
 
-                alert(`ส่งหนู 1 ตัวเข้า Order '${targetOrder.name}' เรียบร้อยแล้ว`);
+                showMessage(`ส่งหนู 1 ตัวเข้า Order '${targetOrder.name}' เรียบร้อยแล้ว`, "success");
             } catch (e) {
                 console.error("Error sending rat to order:", e);
-                alert("เกิดข้อผิดพลาดในการส่ง Order");
+                showMessage("เกิดข้อผิดพลาดในการส่ง Order", "error");
             } finally {
                 button.disabled = false;
                 document.getElementById('action-modal').classList.add('hidden');
@@ -445,15 +532,25 @@
             if (!order) return;
             const updatedItems = [...order.items];
             const item = updatedItems[itemIndex];
-            if (item.status !== 'pending') return alert("Order รายการนี้ถูกปิดไปแล้ว");
+            if (item.status !== 'pending') {
+                 showMessage("Order รายการนี้ถูกปิดไปแล้ว", "warning");
+                 return;
+            }
             item.sent = (item.sent || 0) + 1;
             try {
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
-            } catch (e) { console.error("Error sending quick rat:", e); }
+                showMessage("ส่งหนูด่วนสำเร็จ!", "success");
+            } catch (e) { 
+                console.error("Error sending quick rat:", e);
+                showMessage("เกิดข้อผิดพลาดในการส่งหนูด่วน", "error");
+            }
         }
 
         async function markOrderItemStatus(orderId, itemIndex, status) {
-            if (!['admin', 'officer'].includes(currentUserRole)) return;
+            if (!['admin', 'officer'].includes(currentUserRole)) {
+                 showMessage("คุณไม่มีสิทธิ์ในการจัดการ Order", "error");
+                 return;
+            }
             const order = allOrders.find(o => o.id === orderId);
             if (!order) return;
 
@@ -464,9 +561,10 @@
 
             try {
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
+                showMessage("อัปเดตสถานะ Order สำเร็จ", "success");
             } catch (e) {
                 console.error("Error updating order status:", e);
-                alert("เกิดข้อผิดพลาดในการอัปเดตสถานะ");
+                showMessage("เกิดข้อผิดพลาดในการอัปเดตสถานะ", "error");
             }
         }
 
@@ -512,7 +610,8 @@
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
-                        return alert("กรุณาเลือกตำแหน่งของกระบะก่อน");
+                        showMessage("กรุณาเลือกตำแหน่งของกระบะก่อน", "warning");
+                        return;
                     }
                     document.getElementById('delete-rat-location').textContent = `${currentRack} / ชั้น ${currentShelf} / ${currentSide}`;
                     document.getElementById('delete-rat-modal').classList.remove('hidden');
@@ -532,13 +631,23 @@
                     renderFatteningOrderManager();
                 } else if (classList.contains('weight-selector-btn')) {
                     if (!godMode && (!currentRack || !currentShelf || !currentSide)) {
-                        return alert("กรุณาเลือกตำแหน่งของกระบะก่อน");
+                        showMessage("กรุณาเลือกตำแหน่งของกระบะก่อน", "warning");
+                        return;
                     }
                     currentWeight = button.dataset.weight;
                     const modal = document.getElementById('action-modal');
                     const info = document.getElementById('action-modal-info');
                     if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
                     if (modal) modal.classList.remove('hidden');
+                } else if (id === 'confirm-modal-confirm-btn') {
+                    const action = button.dataset.action;
+                    if (action === 'deleteRack') {
+                        confirmDeleteRack(button.dataset.rackCount, button);
+                    } else if (action === 'deleteOrder') {
+                        confirmDeleteOrder(button.dataset.orderId, button);
+                    } else if (action === 'deleteRat') {
+                         confirmDeleteRat(button);
+                    }
                 }
             });
             document.body.addEventListener('change', (e) => {
@@ -614,7 +723,7 @@
                      <div id="nav-container" class="flex space-x-2 mb-6 justify-center flex-wrap gap-2"></div>
                      <div id="page-content" class="min-h-[400px]"></div>
                 </div>`;
-            document.getElementById('modal-container').innerHTML = renderAddOrderModal() + renderDeleteRatModal() + renderActionModal();
+            document.getElementById('modal-container').innerHTML = renderAddOrderModal() + renderDeleteRatModal() + renderActionModal() + renderConfirmModal();
             renderPageContent();
         }
 
@@ -644,6 +753,7 @@
         function renderMainPage() {
             const pageContent = document.getElementById('page-content');
             if (!pageContent) return;
+            const metrics = calculateDashboardMetrics();
             pageContent.innerHTML = `<div class="animate-fade-in space-y-6">
                 <div class="p-6 bg-gray-50 rounded-lg">
                     <h1 class="text-2xl font-bold text-gray-800">ภาพรวมฟาร์ม</h1>
@@ -901,10 +1011,7 @@
                     <button id="open-delete-rat-modal-btn" class="w-full bg-red-600 text-white p-3 rounded-lg font-bold hover:bg-red-700 transition" type="button">ตาย</button>
                 </div>`;
             } else if (fatteningSubPage === 'order') {
-                actionButtonHtml = `<div class="space-y-2 pt-2">
-                    <button id="send-rat-btn" class="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 transition" type="button">ส่งหนูตาม Order</button>
-                    <button id="return-rat-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition" type="button">ส่งคืนเข้ากระบะ (อัปเดตน้ำหนัก)</button>
-                </div>`;
+                // This section is now handled by renderFatteningOrderManager
             }
 
             return `<form class="bg-gray-50 p-4 rounded-lg space-y-4">
@@ -1032,6 +1139,39 @@
                 </div>
             </div>`;
         }
+        
+        function renderConfirmModal() {
+            return `<div id="confirm-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
+                <div class="bg-white rounded-lg p-6 w-full max-w-md animate-fade-in">
+                    <h2 class="text-2xl font-bold mb-4">ยืนยันการกระทำ</h2>
+                    <p id="confirm-modal-message" class="text-gray-600 mb-4"></p>
+                    <div class="flex justify-end space-x-2 mt-6">
+                        <button type="button" class="close-modal-btn p-2 bg-gray-100 rounded">ยกเลิก</button>
+                        <button id="confirm-modal-confirm-btn" class="p-2 bg-red-500 text-white rounded">ยืนยัน</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+        
+        function showMessage(message, type) {
+            const container = document.getElementById('message-box');
+            if(!container) return;
+            const messageElement = document.createElement('div');
+            let colorClass = '';
+            if (type === 'success') colorClass = 'bg-green-500';
+            else if (type === 'error') colorClass = 'bg-red-500';
+            else if (type === 'warning') colorClass = 'bg-yellow-500';
+            else colorClass = 'bg-gray-500';
+            
+            messageElement.className = `${colorClass} text-white p-4 mb-2 rounded-lg shadow-lg animate-fade-in`;
+            messageElement.textContent = message;
+            container.appendChild(messageElement);
+            setTimeout(() => {
+                messageElement.classList.add('hidden');
+                setTimeout(() => messageElement.remove(), 300);
+            }, 3000);
+        }
+
         function addNewOrderItemRow() {
             const container = document.getElementById('order-items-container');
             const row = document.createElement('div');
@@ -1076,4 +1216,3 @@
     </script>
 </body>
 </html>
-
