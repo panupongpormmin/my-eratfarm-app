@@ -165,7 +165,7 @@
                 let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - targetWeight) < Math.abs(prev.estimatedWeight - targetWeight) ? curr : prev));
                 
                 if (confirm(`ระบบพบหนูที่มีน้ำหนักใกล้เคียงที่สุดคือ ${closestRat.estimatedWeight.toFixed(1)}g.\nคุณต้องการลบหนูตัวนี้ใช่หรือไม่?`)) {
-                    const deathData = { ...closestRat, deathDate: serverTimestamp() };
+                    const deathData = { ...closestRat, deathDate: serverTimestamp(), department: 'fattening' };
                     delete deathData.estimatedWeight; 
                     await addDoc(collection(db, `artifacts/${appId}/public/data/deaths`), deathData);
                     await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
@@ -337,6 +337,18 @@
             }
         }
         
+        async function sendQuickRatToOrder(orderId, itemIndex) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) return;
+            const updatedItems = [...order.items];
+            const item = updatedItems[itemIndex];
+            if (item.status !== 'pending') return alert("Order รายการนี้ถูกปิดไปแล้ว");
+            item.sent = (item.sent || 0) + 1;
+            try {
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
+            } catch (e) { console.error("Error sending quick rat:", e); }
+        }
+
         async function markOrderItemStatus(orderId, itemIndex, status) {
             if (!['admin', 'officer'].includes(currentUserRole)) return;
             const order = allOrders.find(o => o.id === orderId);
@@ -391,7 +403,7 @@
                     }
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
-                else if (id === 'send-rat-btn') sendRatToOrder(button);
+                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
@@ -401,7 +413,6 @@
                     document.getElementById('delete-rat-modal').classList.remove('hidden');
                 }
                 else if (id === 'confirm-delete-rat-btn') deleteClosestRat(button);
-                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
                 else if (id === 'open-add-order-modal') document.getElementById('add-order-modal').classList.remove('hidden');
                 else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (classList.contains('remove-item-btn')) button.closest('.order-item-row').remove();
@@ -434,7 +445,7 @@
             const pageRenderers = {
                 'dashboard': renderDashboardPage, 'main': renderMainPage,
                 'department': renderDepartmentPage, 'ordertasks': renderOrderTasksPage, 
-                'admin': renderAdminPage, 'analytics': renderAnalyticsPage
+                'admin': renderAdminPage
             };
             if (pageRenderers[currentPage]) pageRenderers[currentPage]();
             else renderMainPage();
@@ -557,6 +568,7 @@
             const fatteningSubNav = `<div class="flex space-x-2 mb-6 justify-center border-b pb-4">
                  <button id="sub-nav-fattening-crate" class="fattening-sub-nav-btn text-sm px-3 py-1 rounded-full font-semibold ${fatteningSubPage === 'crate' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100'}">จัดการกระบะ</button>
                  <button id="sub-nav-fattening-order" class="fattening-sub-nav-btn text-sm px-3 py-1 rounded-full font-semibold ${fatteningSubPage === 'order' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100'}">จัดการ Order</button>
+                 <button id="sub-nav-fattening-analytics" class="fattening-sub-nav-btn text-sm px-3 py-1 rounded-full font-semibold ${fatteningSubPage === 'analytics' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100'}">Analytics</button>
             </div>`;
             container.innerHTML = `${fatteningSubNav}<div id="fattening-content-container"></div>`;
             renderFatteningSubContent();
@@ -575,7 +587,10 @@
                 </div>`;
                 renderCrateSummary();
                 renderActiveOrdersSummary();
-            } else {
+            } else if (fatteningSubPage === 'analytics') {
+                renderFatteningAnalytics(container);
+            }
+            else {
                 container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div id="rat-form-container">${renderRatForm()}</div>
                     <div id="crate-summary-container"></div>
@@ -734,9 +749,22 @@
             </div>`;
         }
         
-        function renderTasksPage() {
-            // This function is now OBSOLETE as it's merged into renderOrderTasksPage
-            renderOrderTasksPage();
+        function renderFatteningAnalytics(container) {
+            if (!container) return;
+            const totalPopulation = allRats.length + allDeaths.length;
+            const mortalityRate = totalPopulation > 0 ? ((allDeaths.length / totalPopulation) * 100).toFixed(2) : 0;
+
+            container.innerHTML = `<div class="animate-fade-in space-y-6">
+                <h1 class="text-2xl font-bold">Analytics - แผนกขุน</h1>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-red-50 p-6 rounded-lg shadow">
+                        <h2 class="text-red-800 font-bold text-lg">อัตราการตาย</h2>
+                        <p class="text-4xl font-bold text-red-600 mt-2">${mortalityRate}%</p>
+                        <p class="text-sm text-gray-500 mt-1">จากข้อมูลหนูทั้งหมด ${totalPopulation} ตัว (ตาย ${allDeaths.length} / มีชีวิต ${allRats.length})</p>
+                    </div>
+                    <div class="bg-green-50 p-6 rounded-lg shadow"><h2 class="text-green-800 font-bold text-lg">รายงานการเจริญเติบโต</h2><p class="text-gray-500 mt-2">เร็วๆ นี้...</p></div>
+                </div>
+            </div>`;
         }
 
         // --- UI Components ---
