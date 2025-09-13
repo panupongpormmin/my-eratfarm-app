@@ -389,6 +389,18 @@
                 document.getElementById('action-modal').classList.add('hidden');
             }
         }
+        
+        async function sendQuickRatToOrder(orderId, itemIndex) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) return;
+            const updatedItems = [...order.items];
+            const item = updatedItems[itemIndex];
+            if (item.status !== 'pending') return alert("Order รายการนี้ถูกปิดไปแล้ว");
+            item.sent = (item.sent || 0) + 1;
+            try {
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
+            } catch (e) { console.error("Error sending quick rat:", e); }
+        }
 
         async function markOrderItemStatus(orderId, itemIndex, status) {
             if (!['admin', 'officer'].includes(currentUserRole)) return;
@@ -444,7 +456,7 @@
                     }
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
-                else if (id === 'send-rat-btn') sendRatToOrder(button);
+                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
