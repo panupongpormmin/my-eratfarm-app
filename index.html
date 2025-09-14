@@ -175,7 +175,7 @@
             allRats = []; allOrders = []; allUsers = []; allDeaths = [];
             farmConfig = { rackCount: 6 };
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
-            currentRack = ''; currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
+            currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
         }
 
         async function checkUserRole(user) {
@@ -457,8 +457,9 @@
                  const quantity = parseInt(row.querySelector('.quantity-input').value, 10);
                  const minWeight = parseInt(row.querySelector('.min-weight-input').value, 10);
                  const maxWeight = parseInt(row.querySelector('.max-weight-input').value, 10);
+                 const itemType = row.querySelector('.item-type-select').value;
                  if (size && quantity > 0) {
-                     items.push({ size, quantity, minWeight, maxWeight, sent: 0, status: 'pending' });
+                     items.push({ size, quantity, minWeight, maxWeight, type: itemType, sent: 0, status: 'pending' });
                  }
              });
              if (items.length > 0) {
@@ -536,25 +537,25 @@
 
             // Find Primary Order
             let primaryOrderCandidates = allOrders.filter(o => 
-                o.department === 'fattening' && o.type === orderType && o.priority === 'หลัก' && o.items.some(item => item.size === currentSize && item.status === 'pending')
+                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => item.size === currentSize && item.type === orderType && item.status === 'pending')
             );
 
             if (primaryOrderCandidates.length > 0) {
                  primaryOrderCandidates.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
                  targetOrder = primaryOrderCandidates[0];
-                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.status === 'pending');
+                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.type === orderType && item.status === 'pending');
             }
 
             // If no primary order, find Secondary Order
             if (!targetOrder) {
-                const secondaryOrderCandidates = allOrders.filter(o => o.priority === 'รอง' && o.department === 'fattening' && o.type === orderType);
+                const secondaryOrderCandidates = allOrders.filter(o => o.priority === 'รอง' && o.department === 'fattening');
                 const sortedSecondaryOrders = secondaryOrderCandidates.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
                 
                 for (const order of sortedSecondaryOrders) {
                     if (isLiveRat) {
                          const largerSizeOptions = ratSizeOptions.filter(s => s.order > currentRatOrder);
                          for (const largerSizeData of largerSizeOptions) {
-                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.type === orderType && item.status === 'pending');
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -566,7 +567,7 @@
                          const smallerSizeOptions = ratSizeOptions.filter(s => s.order < currentRatOrder);
                          for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
                              const smallerSizeData = smallerSizeOptions[i];
-                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.type === orderType && item.status === 'pending');
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -976,9 +977,11 @@
                         } else if (item.status !== 'pending') {
                             statusHtml = `<p class="mt-2 text-center font-semibold ${item.status === 'completed' ? 'text-green-600' : 'text-red-600'}">ตรวจสอบแล้ว: ${item.status === 'completed' ? 'สำเร็จ' : 'มีปัญหา'}</p>`;
                         }
-                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>${statusHtml}</div>`;
+                        const itemWeightRange = (item.minWeight && item.maxWeight) ? ` (${item.minWeight}-${item.maxWeight}g)` : '';
+                        const itemTypeLabel = item.type ? ` (${item.type})` : '';
+                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>${statusHtml}</div>`;
                     }).join('');
-                    return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name}</h3><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div><div class="mt-2">${itemsHtml}</div></div>`;
+                    return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name} <span class="text-sm font-normal text-gray-500">(${order.priority})</span></h3><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div><div class="mt-2">${itemsHtml}</div></div>`;
                 }).join('');
                 return `<div class="mt-6"><h2 class="text-xl font-bold mb-3">${dept.title}</h2><div class="space-y-4">${orderListHtml}</div></div>`;
             };
@@ -995,7 +998,7 @@
                 if (order.department === department) {
                     (order.items || []).forEach((item, index) => {
                         if (item.status === 'pending') {
-                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index });
+                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type });
                         }
                     });
                 }
@@ -1003,12 +1006,14 @@
             if (allActiveItems.length === 0) {
                 container.innerHTML = '<div class="text-center p-8 text-gray-500">ไม่มี Order ที่ต้องจัดส่งในขณะนี้</div>'; return;
             }
-            const itemsHtml = allActiveItems.map(item => `
-                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
-                    <div><p class="font-semibold">ไซส์ ${item.size}</p><p class="text-sm text-gray-500">${item.orderName}</p></div>
+            const itemsHtml = allActiveItems.map(item => {
+                const itemTypeLabel = item.type ? ` (${item.type})` : '';
+                return `<div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
+                    <div><p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel}</p><p class="text-sm text-gray-500">${item.orderName}</p></div>
                     <div class="text-right"><p class="font-bold text-lg">${item.sent || 0} / ${item.quantity}</p></div>
                     <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
-                </div>`).join('');
+                </div>`;
+            }).join('');
             container.innerHTML = `<div class="animate-fade-in space-y-6">
                 <h1 class="text-2xl font-bold">Order ที่ต้องจัดส่ง (แผนกของคุณ)</h1>
                 <div class="space-y-3">${itemsHtml}</div>
@@ -1026,7 +1031,10 @@
             const activeOrdersHtml = activeOrders.map(order => {
                 const itemsHtml = (order.items || [])
                     .filter(item => item.status === 'pending')
-                    .map(item => `<div class="text-sm flex justify-between"><span>- ไซส์ ${item.size}</span> <span>${item.sent || 0}/${item.quantity}</span></div>`)
+                    .map(item => {
+                         const itemTypeLabel = item.type ? ` (${item.type})` : '';
+                         return `<div class="text-sm flex justify-between"><span>- ไซส์ ${item.size}${itemTypeLabel}</span> <span>${item.sent || 0}/${item.quantity}</span></div>`;
+                    })
                     .join('');
                 return `<div class="bg-white p-3 rounded-lg shadow-sm">
                     <p class="font-bold truncate">${order.name}</p>
@@ -1197,14 +1205,6 @@
                             </select>
                         </div>
                         <div>
-                            <label for="order-type-select" class="block mb-1">ชนิด Order</label>
-                            <select id="order-type-select" class="w-full p-2 border rounded bg-white">
-                                <option value="">-- เลือกชนิด --</option>
-                                <option value="หนูเป็น">หนูเป็น</option>
-                                <option value="หนูแช่">หนูแช่</option>
-                            </select>
-                        </div>
-                        <div>
                             <label for="order-priority-select" class="block mb-1">ลำดับความสำคัญ</label>
                             <select id="order-priority-select" class="w-full p-2 border rounded bg-white">
                                 <option value="หลัก">หลัก</option>
@@ -1295,8 +1295,10 @@
             row.className = 'order-item-row flex flex-col md:flex-row items-center gap-2 animate-fade-in border p-2 rounded';
             
             const sizeOptions = ratSizeOptions.map(s => `<option value="${s.size}">${s.size}</option>`).join('');
+            const typeOptions = `<option value="หนูเป็น">หนูเป็น</option><option value="หนูแช่">หนูแช่</option>`;
             
             row.innerHTML = `
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">ชนิด</label><select class="item-type-select w-full p-2 border rounded">${typeOptions}</select></div>
                 <div class="flex-1 w-full"><label class="text-sm text-gray-500">ไซส์</label><select class="size-select w-full p-2 border rounded">${sizeOptions}</select></div>
                 <div class="flex-1 w-full"><label class="text-sm text-gray-500">จำนวน</label><input type="number" class="quantity-input w-full p-2 border rounded" placeholder="จำนวน" min="1" value="1"></div>
                 <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักต่ำสุด</label><input type="number" class="min-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value=""></div>
@@ -1305,7 +1307,6 @@
             `;
             container.appendChild(row);
 
-            // Set default min/max weight for the new row
             const sizeSelect = row.querySelector('.size-select');
             const minWeightInput = row.querySelector('.min-weight-input');
             const maxWeightInput = row.querySelector('.max-weight-input');
