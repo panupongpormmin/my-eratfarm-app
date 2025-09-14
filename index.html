@@ -95,10 +95,10 @@
         let chartInstances = {};
         let unsubscribeListeners = [];
         const ratSizeOptions = [
-            { size: "JUMP", minWeight: 9, maxWeight: 13 }, { size: "S", minWeight: 14, maxWeight: 18 },
-            { size: "M", minWeight: 19, maxWeight: 23 }, { size: "L", minWeight: 24, maxWeight: 28 },
-            { size: "XL", minWeight: 29, maxWeight: 33 }, { size: "XXL", minWeight: 34, maxWeight: 38 },
-            { size: "XXL+", minWeight: 39, maxWeight: 45 }
+            { size: "JUMP", minWeight: 9, maxWeight: 13, order: 0 }, { size: "S", minWeight: 14, maxWeight: 18, order: 1 },
+            { size: "M", minWeight: 19, maxWeight: 23, order: 2 }, { size: "L", minWeight: 24, maxWeight: 28, order: 3 },
+            { size: "XL", minWeight: 29, maxWeight: 33, order: 4 }, { size: "XXL", minWeight: 34, maxWeight: 38, order: 5 },
+            { size: "XXL+", minWeight: 39, maxWeight: 45, order: 6 }
         ];
 
         // --- Initialization ---
@@ -175,7 +175,7 @@
             allRats = []; allOrders = []; allUsers = []; allDeaths = [];
             farmConfig = { rackCount: 6 };
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
-            currentRack = ''; currentShelf = ''; currentSide = ''; currentSize = ''; currentWeight = '';
+            currentRack = ''; currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
         }
 
         async function checkUserRole(user) {
@@ -444,8 +444,10 @@
              button.disabled = true;
              const orderName = document.getElementById('order-name-input').value || 'New Order';
              const department = document.getElementById('department-select').value;
-             if (!department) {
-                 showMessage("กรุณาเลือกแผนกที่จะส่ง Order ไปให้", "error");
+             const orderType = document.getElementById('order-type-select').value;
+             const orderPriority = document.getElementById('order-priority-select').value;
+             if (!department || !orderType || !orderPriority) {
+                 showMessage("กรุณาเลือกแผนก, ชนิด, และลำดับความสำคัญของ Order", "error");
                  button.disabled = false;
                  return;
              }
@@ -453,8 +455,10 @@
              document.querySelectorAll('#order-items-container .order-item-row').forEach(row => {
                  const size = row.querySelector('.size-select').value;
                  const quantity = parseInt(row.querySelector('.quantity-input').value, 10);
+                 const minWeight = parseInt(row.querySelector('.min-weight-input').value, 10);
+                 const maxWeight = parseInt(row.querySelector('.max-weight-input').value, 10);
                  if (size && quantity > 0) {
-                     items.push({ size, quantity, sent: 0, status: 'pending' });
+                     items.push({ size, quantity, minWeight, maxWeight, sent: 0, status: 'pending' });
                  }
              });
              if (items.length > 0) {
@@ -462,6 +466,8 @@
                      await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), { 
                          name: orderName, 
                          department: department, 
+                         type: orderType,
+                         priority: orderPriority,
                          items, 
                          createdAt: serverTimestamp() 
                      });
@@ -518,23 +524,63 @@
                  return;
             }
 
+            const selectedRatSizeData = ratSizeOptions.find(s => s.size === currentSize);
+            const currentRatOrder = selectedRatSizeData.order;
+            const currentRatWeight = parseFloat(currentWeight);
+            const isLiveRat = currentRatWeight >= 9; // Assumption: live rats are usually heavier
+            const orderType = isLiveRat ? 'หนูเป็น' : 'หนูแช่';
+
             let targetOrder = null;
             let targetItemIndex = -1;
+            let orderIsSecondary = false;
 
-            const sortedOrders = [...allOrders].sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-            for (const order of sortedOrders) {
-                const index = (order.items || []).findIndex(item =>
-                    item.size === currentSize && item.status === 'pending'
-                );
-                if (index !== -1) {
-                    targetOrder = order;
-                    targetItemIndex = index;
-                    break;
+            // Find Primary Order
+            let primaryOrderCandidates = allOrders.filter(o => 
+                o.department === 'fattening' && o.type === orderType && o.priority === 'หลัก' && o.items.some(item => item.size === currentSize && item.status === 'pending')
+            );
+
+            if (primaryOrderCandidates.length > 0) {
+                 primaryOrderCandidates.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                 targetOrder = primaryOrderCandidates[0];
+                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.status === 'pending');
+            }
+
+            // If no primary order, find Secondary Order
+            if (!targetOrder) {
+                const secondaryOrderCandidates = allOrders.filter(o => o.priority === 'รอง' && o.department === 'fattening' && o.type === orderType);
+                const sortedSecondaryOrders = secondaryOrderCandidates.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                
+                for (const order of sortedSecondaryOrders) {
+                    if (isLiveRat) {
+                         const largerSizeOptions = ratSizeOptions.filter(s => s.order > currentRatOrder);
+                         for (const largerSizeData of largerSizeOptions) {
+                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.status === 'pending');
+                             if (itemIndex !== -1) {
+                                 targetOrder = order;
+                                 targetItemIndex = itemIndex;
+                                 orderIsSecondary = true;
+                                 break;
+                             }
+                         }
+                    } else { // Frozen rat logic
+                         const smallerSizeOptions = ratSizeOptions.filter(s => s.order < currentRatOrder);
+                         for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
+                             const smallerSizeData = smallerSizeOptions[i];
+                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.status === 'pending');
+                             if (itemIndex !== -1) {
+                                 targetOrder = order;
+                                 targetItemIndex = itemIndex;
+                                 orderIsSecondary = true;
+                                 break;
+                             }
+                         }
+                    }
+                    if (targetOrder) break;
                 }
             }
 
             if (!targetOrder) {
-                showMessage(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ถูกปิดไปแล้ว`, "warning");
+                showMessage(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ที่ใกล้เคียง`, "warning");
                 return;
             }
 
@@ -567,7 +613,8 @@
                 updatedItems[targetItemIndex].sent = (updatedItems[targetItemIndex].sent || 0) + 1;
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, targetOrder.id), { items: updatedItems });
 
-                showMessage(`ส่งหนู 1 ตัวเข้า Order '${targetOrder.name}' เรียบร้อยแล้ว`, "success");
+                const orderTypeLabel = orderIsSecondary ? 'Order รอง' : 'Order หลัก';
+                showMessage(`ส่งหนู 1 ตัวเข้า ${orderTypeLabel} '${targetOrder.name}' เรียบร้อยแล้ว`, "success");
             } catch (e) {
                 console.error("Error sending rat to order:", e);
                 showMessage("เกิดข้อผิดพลาดในการส่ง Order", "error");
@@ -1149,6 +1196,21 @@
                                 <option value="breeding">แผนกพ่อแม่พันธุ์</option>
                             </select>
                         </div>
+                        <div>
+                            <label for="order-type-select" class="block mb-1">ชนิด Order</label>
+                            <select id="order-type-select" class="w-full p-2 border rounded bg-white">
+                                <option value="">-- เลือกชนิด --</option>
+                                <option value="หนูเป็น">หนูเป็น</option>
+                                <option value="หนูแช่">หนูแช่</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="order-priority-select" class="block mb-1">ลำดับความสำคัญ</label>
+                            <select id="order-priority-select" class="w-full p-2 border rounded bg-white">
+                                <option value="หลัก">หลัก</option>
+                                <option value="รอง">รอง</option>
+                            </select>
+                        </div>
                         <div id="order-items-container" class="space-y-2 max-h-60 overflow-y-auto p-1"></div>
                         <button type="button" id="add-order-item-btn" class="w-full p-2 bg-gray-200 rounded hover:bg-gray-300">+ เพิ่มรายการ</button>
                     </form>
@@ -1230,12 +1292,37 @@
         function addNewOrderItemRow() {
             const container = document.getElementById('order-items-container');
             const row = document.createElement('div');
-            row.className = 'order-item-row flex items-center gap-2 animate-fade-in';
+            row.className = 'order-item-row flex flex-col md:flex-row items-center gap-2 animate-fade-in border p-2 rounded';
+            
             const sizeOptions = ratSizeOptions.map(s => `<option value="${s.size}">${s.size}</option>`).join('');
-            row.innerHTML = `<select class="size-select w-1/2 p-2 border rounded">${sizeOptions}</select>
-                <input type="number" class="quantity-input w-1/2 p-2 border rounded" placeholder="จำนวน" min="1" value="1">
-                <button type="button" class="remove-item-btn text-red-500 font-bold">X</button>`;
+            
+            row.innerHTML = `
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">ไซส์</label><select class="size-select w-full p-2 border rounded">${sizeOptions}</select></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">จำนวน</label><input type="number" class="quantity-input w-full p-2 border rounded" placeholder="จำนวน" min="1" value="1"></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักต่ำสุด</label><input type="number" class="min-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value=""></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักสูงสุด</label><input type="number" class="max-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value=""></div>
+                <button type="button" class="remove-item-btn text-red-500 font-bold p-2">X</button>
+            `;
             container.appendChild(row);
+
+            // Set default min/max weight for the new row
+            const sizeSelect = row.querySelector('.size-select');
+            const minWeightInput = row.querySelector('.min-weight-input');
+            const maxWeightInput = row.querySelector('.max-weight-input');
+            
+            const defaultSizeData = ratSizeOptions.find(s => s.size === sizeSelect.value);
+            if (defaultSizeData) {
+                minWeightInput.value = defaultSizeData.minWeight;
+                maxWeightInput.value = defaultSizeData.maxWeight;
+            }
+
+            sizeSelect.addEventListener('change', (e) => {
+                const selectedSizeData = ratSizeOptions.find(s => s.size === e.target.value);
+                if (selectedSizeData) {
+                    minWeightInput.value = selectedSizeData.minWeight;
+                    maxWeightInput.value = selectedSizeData.maxWeight;
+                }
+            });
         }
 
         // --- Chart & Metric Helpers ---
