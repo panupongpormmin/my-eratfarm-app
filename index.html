@@ -444,10 +444,9 @@
              button.disabled = true;
              const orderName = document.getElementById('order-name-input').value || 'New Order';
              const department = document.getElementById('department-select').value;
-             const orderType = document.getElementById('order-type-select').value;
              const orderPriority = document.getElementById('order-priority-select').value;
-             if (!department || !orderType || !orderPriority) {
-                 showMessage("กรุณาเลือกแผนก, ชนิด, และลำดับความสำคัญของ Order", "error");
+             if (!department || !orderPriority) {
+                 showMessage("กรุณาเลือกแผนกและลำดับความสำคัญของ Order", "error");
                  button.disabled = false;
                  return;
              }
@@ -467,7 +466,6 @@
                      await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), { 
                          name: orderName, 
                          department: department, 
-                         type: orderType,
                          priority: orderPriority,
                          items, 
                          createdAt: serverTimestamp() 
@@ -529,7 +527,7 @@
             const currentRatOrder = selectedRatSizeData.order;
             const currentRatWeight = parseFloat(currentWeight);
             const isLiveRat = currentRatWeight >= 9; // Assumption: live rats are usually heavier
-            const orderType = isLiveRat ? 'หนูเป็น' : 'หนูแช่';
+            const ratType = isLiveRat ? 'หนูเป็น' : 'หนูแช่';
 
             let targetOrder = null;
             let targetItemIndex = -1;
@@ -537,13 +535,15 @@
 
             // Find Primary Order
             let primaryOrderCandidates = allOrders.filter(o => 
-                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => item.size === currentSize && item.type === orderType && item.status === 'pending')
+                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => 
+                    item.size === currentSize && item.type === ratType && item.status === 'pending'
+                )
             );
 
             if (primaryOrderCandidates.length > 0) {
                  primaryOrderCandidates.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
                  targetOrder = primaryOrderCandidates[0];
-                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.type === orderType && item.status === 'pending');
+                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.type === ratType && item.status === 'pending');
             }
 
             // If no primary order, find Secondary Order
@@ -555,7 +555,7 @@
                     if (isLiveRat) {
                          const largerSizeOptions = ratSizeOptions.filter(s => s.order > currentRatOrder);
                          for (const largerSizeData of largerSizeOptions) {
-                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.type === orderType && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.type === ratType && item.status === 'pending');
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -567,7 +567,7 @@
                          const smallerSizeOptions = ratSizeOptions.filter(s => s.order < currentRatOrder);
                          for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
                              const smallerSizeData = smallerSizeOptions[i];
-                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.type === orderType && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.type === ratType && item.status === 'pending');
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -953,7 +953,12 @@
         }
 
         function renderOrderTasksForOfficer(container) {
-            const sortedOrders = [...allOrders].sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+            const sortedOrders = [...allOrders].sort((a,b) => {
+                const priorityA = a.priority === 'หลัก' ? 0 : 1;
+                const priorityB = b.priority === 'หลัก' ? 0 : 1;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+            });
             const departmentSections = {
                 fattening: { title: 'แผนกขุน', orders: [] },
                 breeding: { title: 'แผนกพ่อแม่พันธุ์', orders: [] }
@@ -998,7 +1003,7 @@
                 if (order.department === department) {
                     (order.items || []).forEach((item, index) => {
                         if (item.status === 'pending') {
-                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type });
+                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type, priority: order.priority });
                         }
                     });
                 }
@@ -1006,10 +1011,21 @@
             if (allActiveItems.length === 0) {
                 container.innerHTML = '<div class="text-center p-8 text-gray-500">ไม่มี Order ที่ต้องจัดส่งในขณะนี้</div>'; return;
             }
+            // Sort by priority (หลัก first) and then by creation date
+            allActiveItems.sort((a, b) => {
+                const priorityA = a.priority === 'หลัก' ? 0 : 1;
+                const priorityB = b.priority === 'หลัก' ? 0 : 1;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                const orderA = allOrders.find(o => o.id === a.orderId);
+                const orderB = allOrders.find(o => o.id === b.orderId);
+                return (orderA?.createdAt?.seconds || 0) - (orderB?.createdAt?.seconds || 0);
+            });
+
             const itemsHtml = allActiveItems.map(item => {
                 const itemTypeLabel = item.type ? ` (${item.type})` : '';
+                const priorityLabel = item.priority ? `(${item.priority})` : '';
                 return `<div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
-                    <div><p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel}</p><p class="text-sm text-gray-500">${item.orderName}</p></div>
+                    <div><p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel}</p><p class="text-sm text-gray-500">${item.orderName} ${priorityLabel}</p></div>
                     <div class="text-right"><p class="font-bold text-lg">${item.sent || 0} / ${item.quantity}</p></div>
                     <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
                 </div>`;
