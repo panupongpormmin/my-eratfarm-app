@@ -172,7 +172,7 @@
 
         function resetAppState() {
             currentUser = null; currentUserRole = null;
-            allRats = []; allOrders = []; allUsers = []; allDeaths = [];
+            allRats = [], allOrders = [], allUsers = [], allDeaths = [];
             farmConfig = { rackCount: 6 };
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
             currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '';
@@ -442,6 +442,7 @@
 
         async function saveOrder(button) {
              button.disabled = true;
+             const orderId = document.getElementById('edit-order-id')?.value;
              const orderName = document.getElementById('order-name-input').value || 'New Order';
              const department = document.getElementById('department-select').value;
              const orderPriority = document.getElementById('order-priority-select').value;
@@ -461,8 +462,21 @@
                      items.push({ size, quantity, minWeight, maxWeight, type: itemType, sent: 0, status: 'pending' });
                  }
              });
-             if (items.length > 0) {
-                 try {
+             if (items.length === 0) {
+                 showMessage("กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ", "error");
+                 button.disabled = false;
+                 return;
+             }
+             try {
+                 if (orderId) {
+                     await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { 
+                         name: orderName,
+                         department,
+                         priority: orderPriority,
+                         items
+                     });
+                     showMessage("แก้ไข Order สำเร็จ", "success");
+                 } else {
                      await addDoc(collection(db, `artifacts/${appId}/public/data/orders`), { 
                          name: orderName, 
                          department: department, 
@@ -470,14 +484,15 @@
                          items, 
                          createdAt: serverTimestamp() 
                      });
-                     document.getElementById('add-order-modal').classList.add('hidden');
                      showMessage("บันทึก Order สำเร็จ", "success");
-                 } catch (e) { 
-                     console.error("Error saving order:", e); 
-                     showMessage("เกิดข้อผิดพลาดในการบันทึก Order", "error");
                  }
+                 document.getElementById('add-order-modal').classList.add('hidden');
+             } catch (e) { 
+                 console.error("Error saving order:", e); 
+                 showMessage("เกิดข้อผิดพลาดในการบันทึก Order", "error");
+             } finally {
+                 button.disabled = false;
              }
-             button.disabled = false;
         }
 
         async function deleteOrder(orderId) {
@@ -503,6 +518,34 @@
                 button.disabled = false;
                 document.getElementById('confirm-modal').classList.add('hidden');
             }
+        }
+
+        async function editOrder(orderId) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) {
+                showMessage("ไม่พบ Order ที่ต้องการแก้ไข", "error");
+                return;
+            }
+            const modal = document.getElementById('add-order-modal');
+            const nameInput = document.getElementById('order-name-input');
+            const departmentSelect = document.getElementById('department-select');
+            const prioritySelect = document.getElementById('order-priority-select');
+            const itemsContainer = document.getElementById('order-items-container');
+            const saveButton = document.getElementById('save-order-btn');
+
+            nameInput.value = order.name;
+            departmentSelect.value = order.department;
+            prioritySelect.value = order.priority;
+            itemsContainer.innerHTML = '';
+            
+            order.items.forEach(item => {
+                addNewOrderItemRow(item);
+            });
+
+            saveButton.textContent = 'บันทึกการแก้ไข';
+            saveButton.dataset.orderId = orderId;
+
+            modal.classList.remove('hidden');
         }
 
         async function updateUserRole(userId, newRole) {
@@ -715,12 +758,22 @@
                     document.getElementById('delete-rat-modal').classList.remove('hidden');
                 }
                 else if (id === 'confirm-delete-rat-btn') deleteClosestRat(button);
-                else if (id === 'open-add-order-modal') document.getElementById('add-order-modal').classList.remove('hidden');
+                else if (id === 'open-add-order-modal') {
+                    const modal = document.getElementById('add-order-modal');
+                    modal.querySelector('h2').textContent = 'สร้าง Order ใหม่';
+                    document.getElementById('save-order-btn').textContent = 'บันทึกและส่งงาน';
+                    document.getElementById('save-order-btn').dataset.orderId = '';
+                    document.getElementById('add-order-form').reset();
+                    document.getElementById('order-items-container').innerHTML = '';
+                    addNewOrderItemRow();
+                    modal.classList.remove('hidden');
+                }
                 else if (id === 'add-order-item-btn') addNewOrderItemRow();
                 else if (classList.contains('remove-item-btn')) button.closest('.order-item-row').remove();
                 else if (id === 'save-order-btn') saveOrder(button);
                 else if (classList.contains('close-modal-btn')) button.closest('.modal').classList.add('hidden');
                 else if (classList.contains('delete-order-btn')) deleteOrder(button.dataset.orderId);
+                else if (classList.contains('edit-order-btn')) editOrder(button.dataset.orderId);
                 else if (classList.contains('mark-order-success')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'completed');
                 else if (classList.contains('mark-order-fail')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'incomplete');
                 else if (classList.contains('size-selector-btn')) {
@@ -986,7 +1039,7 @@
                         const itemTypeLabel = item.type ? ` (${item.type})` : '';
                         return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>${statusHtml}</div>`;
                     }).join('');
-                    return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name} <span class="text-sm font-normal text-gray-500">(${order.priority})</span></h3><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div><div class="mt-2">${itemsHtml}</div></div>`;
+                    return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name} <span class="text-sm font-normal text-gray-500">(${order.priority})</span></h3><div class="flex gap-2"><button class="edit-order-btn text-blue-500 hover:text-blue-700" data-order-id="${order.id}">แก้ไข</button><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div></div><div class="mt-2">${itemsHtml}</div></div>`;
                 }).join('');
                 return `<div class="mt-6"><h2 class="text-xl font-bold mb-3">${dept.title}</h2><div class="space-y-4">${orderListHtml}</div></div>`;
             };
@@ -1211,6 +1264,7 @@
                 <div class="bg-white rounded-lg p-6 w-full max-w-md animate-fade-in">
                     <h2 class="text-2xl font-bold mb-4">สร้าง Order ใหม่</h2>
                     <form id="add-order-form" class="space-y-4">
+                        <input type="hidden" id="edit-order-id">
                         <div><label for="order-name-input" class="block mb-1">ชื่อ Order</label><input type="text" id="order-name-input" class="w-full p-2 border rounded" value="Order ${new Date().toLocaleDateString('th-TH')}"></div>
                         <div>
                             <label for="department-select" class="block mb-1">ส่งให้แผนก</label>
@@ -1305,20 +1359,24 @@
             }, 3000);
         }
 
-        function addNewOrderItemRow() {
+        function addNewOrderItemRow(item = null) {
             const container = document.getElementById('order-items-container');
             const row = document.createElement('div');
             row.className = 'order-item-row flex flex-col md:flex-row items-center gap-2 animate-fade-in border p-2 rounded';
             
-            const sizeOptions = ratSizeOptions.map(s => `<option value="${s.size}">${s.size}</option>`).join('');
-            const typeOptions = `<option value="หนูเป็น">หนูเป็น</option><option value="หนูแช่">หนูแช่</option>`;
+            const sizeOptions = ratSizeOptions.map(s => `<option value="${s.size}" ${item && item.size === s.size ? 'selected' : ''}>${s.size}</option>`).join('');
+            const typeOptions = `<option value="หนูเป็น" ${item && item.type === 'หนูเป็น' ? 'selected' : ''}>หนูเป็น</option><option value="หนูแช่" ${item && item.type === 'หนูแช่' ? 'selected' : ''}>หนูแช่</option>`;
             
+            const quantityValue = item ? item.quantity : 1;
+            const minWeightValue = item ? item.minWeight : ratSizeOptions[0].minWeight;
+            const maxWeightValue = item ? item.maxWeight : ratSizeOptions[0].maxWeight;
+
             row.innerHTML = `
                 <div class="flex-1 w-full"><label class="text-sm text-gray-500">ชนิด</label><select class="item-type-select w-full p-2 border rounded">${typeOptions}</select></div>
                 <div class="flex-1 w-full"><label class="text-sm text-gray-500">ไซส์</label><select class="size-select w-full p-2 border rounded">${sizeOptions}</select></div>
-                <div class="flex-1 w-full"><label class="text-sm text-gray-500">จำนวน</label><input type="number" class="quantity-input w-full p-2 border rounded" placeholder="จำนวน" min="1" value="1"></div>
-                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักต่ำสุด</label><input type="number" class="min-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value=""></div>
-                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักสูงสุด</label><input type="number" class="max-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value=""></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">จำนวน</label><input type="number" class="quantity-input w-full p-2 border rounded" placeholder="จำนวน" min="1" value="${quantityValue}"></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักต่ำสุด</label><input type="number" class="min-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value="${minWeightValue}"></div>
+                <div class="flex-1 w-full"><label class="text-sm text-gray-500">น้ำหนักสูงสุด</label><input type="number" class="max-weight-input w-full p-2 border rounded" placeholder="กรัม" min="1" value="${maxWeightValue}"></div>
                 <button type="button" class="remove-item-btn text-red-500 font-bold p-2">X</button>
             `;
             container.appendChild(row);
@@ -1326,13 +1384,8 @@
             const sizeSelect = row.querySelector('.size-select');
             const minWeightInput = row.querySelector('.min-weight-input');
             const maxWeightInput = row.querySelector('.max-weight-input');
-            
-            const defaultSizeData = ratSizeOptions.find(s => s.size === sizeSelect.value);
-            if (defaultSizeData) {
-                minWeightInput.value = defaultSizeData.minWeight;
-                maxWeightInput.value = defaultSizeData.maxWeight;
-            }
 
+            // Update min/max weight when size changes
             sizeSelect.addEventListener('change', (e) => {
                 const selectedSizeData = ratSizeOptions.find(s => s.size === e.target.value);
                 if (selectedSizeData) {
