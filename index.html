@@ -815,6 +815,8 @@
                     if (sendRatBtn) sendRatBtn.disabled = !findMatchingOrder();
 
                     if (modal) modal.classList.remove('hidden');
+                } else if (id === 'send-rat-btn') {
+                     sendRatToOrder(button);
                 } else if (id === 'open-clear-crate-btn') {
                     clearCrate();
                 } else if (id === 'confirm-modal-confirm-btn') {
@@ -1457,30 +1459,37 @@
             
             const currentRatWeight = parseFloat(currentWeight);
             const selectedSizeData = ratSizeOptions.find(s => s.size === currentSize);
+            if (!selectedSizeData) return false;
             const currentRatOrder = selectedSizeData.order;
-            const ratType = currentRatWeight >= 9 ? 'หนูเป็น' : 'หนูแช่';
-
+            const ratType = 'หนูเป็น'; // Hardcoded assumption for this flow
+            
+            // Filter orders for 'fattening' department
+            const relevantOrders = allOrders.filter(o => o.department === 'fattening');
+            
             // Check for Primary Order
-            const primaryOrderFound = allOrders.some(o => 
-                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => 
+            const primaryOrderFound = relevantOrders.some(o => 
+                o.priority === 'หลัก' && o.items.some(item => 
                     item.size === currentSize && item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight
                 )
             );
             if (primaryOrderFound) return true;
 
             // Check for Secondary Order
-            const secondaryOrderFound = allOrders.some(o => o.priority === 'รอง' && o.department === 'fattening' && o.items.some(item => {
-                if (ratType === 'หนูเป็น') {
-                    const largerSizeData = ratSizeOptions.find(s => s.size === item.size);
-                    if (largerSizeData && largerSizeData.order > currentRatOrder) {
-                        return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
-                    }
-                } else { // Frozen rat logic
-                    const smallerSizeData = ratSizeOptions.find(s => s.size === item.size);
-                    if (smallerSizeData && smallerSizeData.order < currentRatOrder) {
-                        return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
-                    }
-                }
+            const secondaryOrderFound = relevantOrders.some(o => o.priority === 'รอง' && o.items.some(item => {
+                 const targetItemSizeData = ratSizeOptions.find(s => s.size === item.size);
+                 if (!targetItemSizeData) return false;
+
+                 if (ratType === 'หนูเป็น') {
+                     // Live rats can be sent to larger size orders
+                     if (targetItemSizeData.order > currentRatOrder) {
+                         return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
+                     }
+                 } else { // Frozen rat logic
+                     // Frozen rats can be sent to smaller size orders
+                     if (targetItemSizeData.order < currentRatOrder) {
+                         return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
+                     }
+                 }
                 return false;
             }));
             
