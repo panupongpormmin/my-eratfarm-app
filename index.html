@@ -1104,10 +1104,24 @@
             const itemsHtml = allActiveItems.map(item => {
                 const itemTypeLabel = item.type ? ` (${item.type})` : '';
                 const priorityLabel = item.priority ? `(${item.priority})` : '';
-                return `<div class="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between gap-4">
-                    <div><p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel}</p><p class="text-sm text-gray-500">${item.orderName} ${priorityLabel}</p></div>
-                    <div class="text-right"><p class="font-bold text-lg">${item.sent || 0} / ${item.quantity}</p></div>
-                    <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
+                const sent = item.sent || 0;
+                const quantity = item.quantity;
+                const progress = quantity > 0 ? (sent / quantity) * 100 : 0;
+                const isComplete = sent >= quantity;
+                return `<div class="bg-white p-4 rounded-lg shadow-sm">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel}</p>
+                            <p class="text-sm text-gray-500">${item.orderName} ${priorityLabel}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg">${sent} / ${quantity}</p>
+                            <div class="w-24 bg-gray-200 rounded-full h-2.5 mt-1">
+                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div>
+                            </div>
+                        </div>
+                        <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
+                    </div>
                 </div>`;
             }).join('');
             container.innerHTML = `<div class="animate-fade-in space-y-6">
