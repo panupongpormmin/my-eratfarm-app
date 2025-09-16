@@ -1055,7 +1055,7 @@
             allOrders.forEach(order => {
                 if (order.department === department) {
                     (order.items || []).forEach((item, index) => {
-                        if (item.status === 'pending') {
+                        if (item.status === 'pending' && (item.sent || 0) < item.quantity) {
                             allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type, priority: order.priority });
                         }
                     });
