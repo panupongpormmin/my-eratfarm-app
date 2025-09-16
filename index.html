@@ -810,6 +810,10 @@
                     const modal = document.getElementById('action-modal');
                     const info = document.getElementById('action-modal-info');
                     if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
+                    
+                    const sendRatBtn = document.getElementById('send-rat-btn');
+                    if (sendRatBtn) sendRatBtn.disabled = !findMatchingOrder();
+
                     if (modal) modal.classList.remove('hidden');
                 } else if (id === 'open-clear-crate-btn') {
                     clearCrate();
@@ -1469,12 +1473,12 @@
                 if (ratType === 'หนูเป็น') {
                     const largerSizeData = ratSizeOptions.find(s => s.size === item.size);
                     if (largerSizeData && largerSizeData.order > currentRatOrder) {
-                        return item.type === ratType && item.status === 'pending' && currentRatWeight <= item.maxWeight;
+                        return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
                     }
                 } else { // Frozen rat logic
                     const smallerSizeData = ratSizeOptions.find(s => s.size === item.size);
                     if (smallerSizeData && smallerSizeData.order < currentRatOrder) {
-                        return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight;
+                        return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
                     }
                 }
                 return false;
