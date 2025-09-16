@@ -1083,7 +1083,7 @@
                 if (order.department === department) {
                     (order.items || []).forEach((item, index) => {
                         if (item.status === 'pending' && (item.sent || 0) < item.quantity) {
-                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type, priority: order.priority });
+                            allActiveItems.push({ ...item, orderName: order.name, orderId: order.id, itemIndex: index, type: order.type, priority: order.priority, createdAt: order.createdAt });
                         }
                     });
                 }
@@ -1096,9 +1096,7 @@
                 const priorityA = a.priority === 'หลัก' ? 0 : 1;
                 const priorityB = b.priority === 'หลัก' ? 0 : 1;
                 if (priorityA !== priorityB) return priorityA - priorityB;
-                const orderA = allOrders.find(o => o.id === a.orderId);
-                const orderB = allOrders.find(o => o.id === b.orderId);
-                return (orderA?.createdAt?.seconds || 0) - (orderB?.createdAt?.seconds || 0);
+                return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
             });
 
             const itemsHtml = allActiveItems.map(item => {
@@ -1489,7 +1487,7 @@
             if (primaryOrderFound) return true;
 
             // Check for Secondary Order
-            const secondaryOrderFound = relevantOrders.some(o => o.priority === 'รอง' && o.items.some(item => {
+            const secondaryOrderFound = relevantOrders.some(o => o.priority === 'รอง' && o.department === 'fattening' && o.items.some(item => {
                  const targetItemSizeData = ratSizeOptions.find(s => s.size === item.size);
                  if (!targetItemSizeData) return false;
 
