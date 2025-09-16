@@ -598,7 +598,9 @@
                     if (isLiveRat) {
                          const largerSizeOptions = ratSizeOptions.filter(s => s.order > currentRatOrder);
                          for (const largerSizeData of largerSizeOptions) {
-                             const itemIndex = (order.items || []).findIndex(item => item.size === largerSizeData.size && item.type === ratType && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => 
+                                 item.size === largerSizeData.size && item.type === ratType && item.status === 'pending' && currentRatWeight <= item.maxWeight
+                             );
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -610,7 +612,9 @@
                          const smallerSizeOptions = ratSizeOptions.filter(s => s.order < currentRatOrder);
                          for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
                              const smallerSizeData = smallerSizeOptions[i];
-                             const itemIndex = (order.items || []).findIndex(item => item.size === smallerSizeData.size && item.type === ratType && item.status === 'pending');
+                             const itemIndex = (order.items || []).findIndex(item => 
+                                 item.size === smallerSizeData.size && item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight
+                             );
                              if (itemIndex !== -1) {
                                  targetOrder = order;
                                  targetItemIndex = itemIndex;
@@ -627,6 +631,14 @@
                 showMessage(`ไม่พบ Order ที่ต้องการหนูไซส์ ${currentSize} หรือ Order ที่ใกล้เคียง`, "warning");
                 return;
             }
+             if (godMode) {
+                 const targetItem = targetOrder.items[targetItemIndex];
+                 if (currentRatWeight < targetItem.minWeight || currentRatWeight > targetItem.maxWeight) {
+                     showMessage(`น้ำหนักหนู (${currentRatWeight}g) ไม่ตรงกับช่วงน้ำหนักของ Order (${targetItem.minWeight}-${targetItem.maxWeight}g)`, "warning");
+                     button.disabled = false;
+                     return;
+                 }
+             }
 
             button.disabled = true;
 
@@ -648,7 +660,16 @@
                         const estimatedWeight = rat.weight + (daysAgo * 0.9);
                         return { ...rat, estimatedWeight };
                     });
-                    let closestRat = candidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
+                    
+                    const targetItem = targetOrder.items[targetItemIndex];
+                    const validCandidates = candidates.filter(c => c.estimatedWeight >= targetItem.minWeight && c.estimatedWeight <= targetItem.maxWeight);
+
+                    if (validCandidates.length === 0) {
+                         showMessage("ไม่พบหนูที่น้ำหนักอยู่ในช่วง Order นี้", "warning");
+                         button.disabled = false; return;
+                    }
+
+                    let closestRat = validCandidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
 
                     await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
                 }
