@@ -55,7 +55,6 @@
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans p-4">
     <div id="app-container" class="container mx-auto p-4 bg-white rounded-2xl shadow-2xl min-h-[90vh] flex flex-col items-center justify-center">
-        <!-- สถานะโหลดเริ่มต้น -->
         <div class="text-gray-500 flex items-center">
             <svg class="animate-spin h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
             กำลังเริ่มต้น...
@@ -1207,6 +1206,63 @@
         }
 
         // --- UI Components ---
+        
+        // ############################## FUNCTION ที่เพิ่มเข้ามา ##############################
+        function renderActiveOrdersSummaryForFatteningPage() {
+            let activeItems = [];
+            allOrders.forEach(order => {
+                if (order.department === 'fattening') {
+                    (order.items || []).forEach((item, index) => {
+                        if (item.status === 'pending' && (item.sent || 0) < item.quantity) {
+                            activeItems.push({ ...item, orderName: order.name, priority: order.priority, createdAt: order.createdAt });
+                        }
+                    });
+                }
+            });
+
+            if (activeItems.length === 0) {
+                return '<h3 class="font-bold text-xl mb-2">✅ ไม่มี Order ที่ต้องจัดส่ง</h3>';
+            }
+            
+            // Sort by priority (หลัก first), then by creation date
+            activeItems.sort((a, b) => {
+                const priorityA = a.priority === 'หลัก' ? 0 : 1;
+                const priorityB = b.priority === 'หลัก' ? 0 : 1;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+            });
+
+            const itemsHtml = activeItems.map(item => {
+                const sent = item.sent || 0;
+                const quantity = item.quantity;
+                const progress = quantity > 0 ? (sent / quantity) * 100 : 0;
+                const isComplete = sent >= quantity;
+                const itemTypeLabel = item.type ? ` (${item.type})` : '';
+                const priorityLabel = item.priority ? `(${item.priority})` : '';
+
+                return `<div class="bg-white p-3 rounded-lg shadow-sm">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <p class="font-semibold">ไซส์ ${item.size}${itemTypeLabel} <span class="text-sm text-gray-500">${priorityLabel}</span></p>
+                            <p class="text-xs text-gray-500">${item.orderName}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg">${sent} / ${quantity}</p>
+                            <div class="w-24 bg-gray-200 rounded-full h-2 mt-1">
+                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `<div class="space-y-3">
+                        <h3 class="font-bold text-xl mb-2">🎯 Order ที่ต้องจัดส่ง</h3>
+                        <div class="space-y-2 max-h-60 overflow-y-auto pr-2">${itemsHtml}</div>
+                    </div>`;
+        }
+        // #################################################################################
+
         function renderRatForm() {
             const rackOptions = [...Array(farmConfig.rackCount || 6).keys()].map(i => `<option value="Rack ${i + 1}" ${currentRack === `Rack ${i+1}` ? 'selected':''}>Rack ${i + 1}</option>`).join('');
             const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
@@ -1262,6 +1318,10 @@
                     <div class="flex justify-end items-center gap-2">
                         <span class="font-bold ${godMode ? 'text-red-500' : 'text-gray-600'}">God Mode</span>
                         <label class="god-mode-toggle"><input type="checkbox" id="god-mode-checkbox" ${godMode ? 'checked' : ''}><span class="slider"></span></label>
+                    </div>
+
+                    <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+                        ${renderActiveOrdersSummaryForFatteningPage()}
                     </div>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4 ${godMode ? 'hidden' : ''}">
                         <h2 class="text-xl font-bold">1. เลือกตำแหน่งกระบะ</h2>
