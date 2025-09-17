@@ -1023,7 +1023,7 @@
                         }
                         const itemWeightRange = (item.minWeight && item.maxWeight) ? ` (${item.minWeight}-${item.maxWeight}g)` : '';
                         const itemTypeLabel = item.type ? ` (${item.type})` : '';
-                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div></div>${statusHtml}</div>`;
+                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div></div>${statusHtml}</div>`;
                     }).join('');
                     return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name} <span class="text-sm font-normal text-gray-500">(${order.priority})</span></h3><div class="flex gap-2"><button class="edit-order-btn text-blue-500 hover:text-blue-700" data-order-id="${order.id}">แก้ไข</button><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div></div><div class="mt-2">${itemsHtml}</div></div>`;
                 }).join('');
@@ -1074,7 +1074,7 @@
                         <div class="text-right">
                             <p class="font-bold text-lg">${sent} / ${quantity}</p>
                             <div class="w-24 bg-gray-200 rounded-full h-2.5 mt-1">
-                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div>
+                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div>
                             </div>
                         </div>
                         <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
@@ -1207,7 +1207,7 @@
                         <div class="text-right">
                             <p class="font-bold text-lg">${sent} / ${quantity}</p>
                             <div class="w-24 bg-gray-200 rounded-full h-2 mt-1">
-                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width:${progress}%"></div>
+                                <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div>
                             </div>
                         </div>
                     </div>
@@ -1584,4 +1584,5 @@
     </script>
 </body>
 </html>
+" selected in my editor, I have a query: แก้ไขเพิ่มเติมให้มีหลอดสีขึ้น พร้อมเพิ่มปุ่ม รีเซ็ตข้างปุ่มส่งงานในหน้า order/งาน โดยปุ่ม รีเซ็ต จะเป็นการรีเซ็ตค่า sent ให้เป็น 0 ในออเดอร์นั้นๆ เฉพาะออเดอร์ของแผนกขุน
 
