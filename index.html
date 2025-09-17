@@ -91,7 +91,7 @@
         let subPage = '';
         let fatteningSubPage = 'crate';
         let godMode = false;
-        let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '', currentType = 'หนูเป็น';
+        let currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '', currentType = '';
         let chartInstances = {};
         let unsubscribeListeners = [];
         const ratSizeOptions = [
@@ -175,7 +175,7 @@
             allRats = [], allOrders = [], allUsers = [], allDeaths = [];
             farmConfig = { rackCount: 6 };
             currentPage = 'main'; subPage = ''; fatteningSubPage = 'crate';
-            currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '', currentType = 'หนูเป็น';
+            currentRack = '', currentShelf = '', currentSide = '', currentSize = '', currentWeight = '', currentType = '';
         }
 
         async function checkUserRole(user) {
@@ -559,7 +559,7 @@
         }
 
         async function sendRatToOrder(button) {
-            let requiredFields = godMode ? ['currentType', 'currentSize', 'currentWeight'] : ['currentRack', 'currentShelf', 'currentSide', 'currentType', 'currentSize', 'currentWeight'];
+            let requiredFields = godMode ? ['currentSize', 'currentWeight'] : ['currentRack', 'currentShelf', 'currentSide', 'currentSize', 'currentWeight'];
             let missingFields = requiredFields.filter(field => !eval(field));
             if(missingFields.length > 0) {
                  showMessage("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
@@ -569,7 +569,7 @@
             const selectedRatSizeData = ratSizeOptions.find(s => s.size === currentSize);
             const currentRatOrder = selectedRatSizeData.order;
             const currentRatWeight = parseFloat(currentWeight);
-            const ratType = currentType; // Use selected type
+            const ratType = getRatTypeFromWeight(currentSize, currentRatWeight);
             const isLiveRat = ratType === 'หนูเป็น';
 
             let targetOrder = null;
@@ -797,10 +797,6 @@
                 else if (classList.contains('edit-order-btn')) editOrder(button.dataset.orderId);
                 else if (classList.contains('mark-order-success')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'completed');
                 else if (classList.contains('mark-order-fail')) markOrderItemStatus(button.dataset.orderId, button.dataset.itemIndex, 'incomplete');
-                else if (classList.contains('type-selector-btn')) {
-                    currentType = button.dataset.type;
-                    renderFatteningOrderManager();
-                }
                 else if (classList.contains('size-selector-btn')) {
                     currentSize = button.dataset.size;
                     currentWeight = '';
@@ -811,9 +807,11 @@
                         return;
                     }
                     currentWeight = button.dataset.weight;
+                    currentType = getRatTypeFromWeight(currentSize, parseFloat(currentWeight));
+                    
                     const modal = document.getElementById('action-modal');
                     const info = document.getElementById('action-modal-info');
-                    if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ประเภท: ${currentType} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g`;
+                    if (info) info.textContent = `ตำแหน่ง: ${godMode ? 'N/A' : `${currentRack}/${currentShelf}/${currentSide}`} | ไซส์: ${currentSize} | น้ำหนัก: ${currentWeight}g | ประเภท: ${currentType} (Auto)`;
                     
                     const sendRatBtn = document.getElementById('send-rat-btn');
                     if (sendRatBtn) sendRatBtn.disabled = !findMatchingOrder();
@@ -1305,10 +1303,6 @@
             const shelfOptions = [...Array(6).keys()].map(i => `<option value="${i + 1}" ${currentShelf == (i+1) ? 'selected':''}>ชั้น ${i + 1}</option>`).join('');
             const sideOptions = ['ซ้าย', 'ขวา'].map(s => `<option value="${s}" ${currentSide === s ? 'selected':''}>${s}</option>`).join('');
             
-            const typeButtonsHtml = ['หนูเป็น', 'หนูแช่'].map(type => 
-                `<button class="type-selector-btn p-3 border-2 rounded-lg font-semibold ${currentType === type ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-300'}" data-type="${type}">${type}</button>`
-            ).join('');
-            
             const sizeButtonsHtml = ratSizeOptions.map(opt => `<button class="size-selector-btn p-3 border-2 rounded-lg font-semibold ${currentSize === opt.size ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-300'}" data-size="${opt.size}">${opt.size}</button>`).join('');
             
             let weightButtonsHtml = '';
@@ -1339,10 +1333,6 @@
                     </div>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4">
                         <h2 class="text-xl font-bold">2. เลือกไซส์และน้ำหนักหนู</h2>
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-700 mb-2">ประเภท</h3>
-                            <div class="grid grid-cols-2 gap-2">${typeButtonsHtml}</div>
-                        </div>
                         <div class="mt-4">
                             <h3 class="text-lg font-semibold text-gray-700 mb-2">ไซส์</h3>
                             <div class="grid grid-cols-4 gap-2">${sizeButtonsHtml}</div>
@@ -1538,21 +1528,45 @@
             chartInstances[canvasId] = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: ['rgba(34, 197, 94, 0.7)', 'rgba(239, 68, 68, 0.7)'] }] }, options: { responsive: true } });
         }
 
+        // ############################## NEW LOGIC STARTS HERE ##############################
+        function getRatTypeFromWeight(size, weight) {
+            const w = parseFloat(weight);
+            switch (size) {
+                case 'JUMP':
+                    return (w >= 12 && w <= 13) ? 'หนูเป็น' : 'หนูแช่';
+                case 'S':
+                    return (w >= 17 && w <= 18) ? 'หนูเป็น' : 'หนูแช่';
+                case 'M':
+                    return (w >= 22 && w <= 23) ? 'หนูเป็น' : 'หนูแช่';
+                case 'L':
+                    return (w >= 27 && w <= 28) ? 'หนูเป็น' : 'หนูแช่';
+                case 'XL':
+                    return (w >= 32 && w <= 33) ? 'หนูเป็น' : 'หนูแช่';
+                case 'XXL':
+                    return (w >= 37 && w <= 38) ? 'หนูเป็น' : 'หนูแช่';
+                case 'XXL+':
+                    return (w >= 39) ? 'หนูเป็น' : 'หนูแช่';
+                default:
+                    return 'หนูแช่';
+            }
+        }
+
         function findMatchingOrder() {
-            if (!currentType || !currentSize || !currentWeight) return false;
+            if (!currentSize || !currentWeight) return false;
             
             const currentRatWeight = parseFloat(currentWeight);
+            const ratType = getRatTypeFromWeight(currentSize, currentRatWeight);
+            const isLiveRat = (ratType === 'หนูเป็น');
+
             const selectedSizeData = ratSizeOptions.find(s => s.size === currentSize);
             if (!selectedSizeData) return false;
             const currentRatOrder = selectedSizeData.order;
-            const ratType = currentType;
-            const isLiveRat = (ratType === 'หนูเป็น');
             
             const relevantOrders = allOrders.filter(o => o.department === 'fattening');
             
             const primaryOrderFound = relevantOrders.some(o => 
                 o.priority === 'หลัก' && o.items.some(item => 
-                    item.size === currentSize && item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight
+                    item.size === currentSize && item.type === ratType && item.status === 'pending'
                 )
             );
             if (primaryOrderFound) return true;
@@ -1575,7 +1589,9 @@
             
             return secondaryOrderFound;
         }
+        // ############################## NEW LOGIC ENDS HERE ##############################
         
     </script>
 </body>
 </html>
+
