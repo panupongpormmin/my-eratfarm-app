@@ -561,86 +561,47 @@
         async function sendRatToOrder(button) {
             let requiredFields = godMode ? ['currentSize', 'currentWeight'] : ['currentRack', 'currentShelf', 'currentSide', 'currentSize', 'currentWeight'];
             let missingFields = requiredFields.filter(field => !eval(field));
-            if(missingFields.length > 0) {
-                 showMessage("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
-                 return;
-            }
-
-            const selectedRatSizeData = ratSizeOptions.find(s => s.size === currentSize);
-            const currentRatOrder = selectedRatSizeData.order;
-            const currentRatWeight = parseFloat(currentWeight);
-            const ratType = getRatTypeFromWeight(currentSize, currentRatWeight);
-            const isLiveRat = ratType === 'หนูเป็น';
-
-            let targetOrder = null;
-            let targetItemIndex = -1;
-            let orderIsSecondary = false;
-
-            // Find Primary Order
-            let primaryOrderCandidates = allOrders.filter(o => 
-                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => 
-                    item.size === currentSize && item.type === ratType && item.status === 'pending'
-                )
-            );
-
-            if (primaryOrderCandidates.length > 0) {
-                 primaryOrderCandidates.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-                 targetOrder = primaryOrderCandidates[0];
-                 targetItemIndex = targetOrder.items.findIndex(item => item.size === currentSize && item.type === ratType && item.status === 'pending');
-            }
-
-            // If no primary order, find Secondary Order
-            if (!targetOrder) {
-                const secondaryOrderCandidates = allOrders.filter(o => o.priority === 'รอง' && o.department === 'fattening');
-                const sortedSecondaryOrders = secondaryOrderCandidates.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-                
-                for (const order of sortedSecondaryOrders) {
-                    if (isLiveRat) {
-                         const largerSizeOptions = ratSizeOptions.filter(s => s.order > currentRatOrder);
-                         for (const largerSizeData of largerSizeOptions) {
-                             const itemIndex = (order.items || []).findIndex(item => 
-                                 item.size === largerSizeData.size && item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight
-                             );
-                             if (itemIndex !== -1) {
-                                 targetOrder = order;
-                                 targetItemIndex = itemIndex;
-                                 orderIsSecondary = true;
-                                 break;
-                             }
-                         }
-                    } else { // Frozen rat logic
-                         const smallerSizeOptions = ratSizeOptions.filter(s => s.order < currentRatOrder);
-                         for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
-                             const smallerSizeData = smallerSizeOptions[i];
-                             const itemIndex = (order.items || []).findIndex(item => 
-                                 item.size === smallerSizeData.size && item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight
-                             );
-                             if (itemIndex !== -1) {
-                                 targetOrder = order;
-                                 targetItemIndex = itemIndex;
-                                 orderIsSecondary = true;
-                                 break;
-                             }
-                         }
-                    }
-                    if (targetOrder) break;
-                }
-            }
-
-            if (!targetOrder) {
-                showMessage(`ไม่พบ Order ที่ต้องการหนูประเภท '${ratType}' ไซส์ '${currentSize}' หรือ Order ที่ใกล้เคียง`, "warning");
+            if (missingFields.length > 0) {
+                showMessage("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
                 return;
             }
-             if (godMode) {
-                 const targetItem = targetOrder.items[targetItemIndex];
-                 if (currentRatWeight < targetItem.minWeight || currentRatWeight > targetItem.maxWeight) {
-                     showMessage(`น้ำหนักหนู (${currentRatWeight}g) ไม่ตรงกับช่วงน้ำหนักของ Order (${targetItem.minWeight}-${targetItem.maxWeight}g)`, "warning");
-                     button.disabled = false;
-                     return;
-                 }
-             }
 
             button.disabled = true;
+            const initialRatType = getRatTypeFromWeight(currentSize, parseFloat(currentWeight));
+            let targetOrder = null, targetItemIndex = -1, orderIsSecondary = false;
+
+            // --- Pass 1: Search for the original determined type ('หนูเป็น' or 'หนูแช่') ---
+            let searchResult = findOrderLogic(currentSize, parseFloat(currentWeight), initialRatType);
+            if (searchResult) {
+                targetOrder = searchResult.order;
+                targetItemIndex = searchResult.itemIndex;
+                orderIsSecondary = searchResult.isSecondary;
+            }
+
+            // --- Pass 2: If it was a live rat and no order was found, try sending to a frozen rat order ---
+            if (!targetOrder && initialRatType === 'หนูเป็น') {
+                let fallbackResult = findOrderLogic(currentSize, parseFloat(currentWeight), 'หนูแช่');
+                if (fallbackResult) {
+                    targetOrder = fallbackResult.order;
+                    targetItemIndex = fallbackResult.itemIndex;
+                    orderIsSecondary = fallbackResult.isSecondary;
+                }
+            }
+            
+            if (!targetOrder) {
+                showMessage(`ไม่พบ Order ที่ตรงกับหนูไซส์ '${currentSize}' (น้ำหนัก ${currentWeight}g)`, "warning");
+                button.disabled = false;
+                return;
+            }
+            
+            if (godMode) {
+                const targetItem = targetOrder.items[targetItemIndex];
+                if (parseFloat(currentWeight) < targetItem.minWeight || parseFloat(currentWeight) > targetItem.maxWeight) {
+                    showMessage(`น้ำหนักหนู (${currentWeight}g) ไม่ตรงกับช่วงน้ำหนักของ Order (${targetItem.minWeight}-${targetItem.maxWeight}g)`, "warning");
+                    button.disabled = false;
+                    return;
+                }
+            }
 
             try {
                 if (!godMode) {
@@ -651,9 +612,7 @@
                         showMessage("ไม่พบหนูในกระบะที่เลือก", "warning");
                         button.disabled = false; return;
                     }
-
                     const now = new Date();
-                    const weightToFind = parseFloat(currentWeight);
                     const candidates = querySnapshot.docs.map(doc => {
                         const rat = { id: doc.id, ...doc.data() };
                         const daysAgo = (now - new Date(rat.createdAt)) / (1000 * 60 * 60 * 24);
@@ -663,14 +622,11 @@
                     
                     const targetItem = targetOrder.items[targetItemIndex];
                     const validCandidates = candidates.filter(c => c.estimatedWeight >= targetItem.minWeight && c.estimatedWeight <= targetItem.maxWeight);
-
                     if (validCandidates.length === 0) {
                          showMessage("ไม่พบหนูที่น้ำหนักอยู่ในช่วง Order นี้", "warning");
                          button.disabled = false; return;
                     }
-
-                    let closestRat = validCandidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - weightToFind) < Math.abs(prev.estimatedWeight - weightToFind) ? curr : prev));
-
+                    let closestRat = validCandidates.reduce((prev, curr) => (Math.abs(curr.estimatedWeight - parseFloat(currentWeight)) < Math.abs(prev.estimatedWeight - parseFloat(currentWeight)) ? curr : prev));
                     await deleteDoc(doc(db, `artifacts/${appId}/public/data/rats`, closestRat.id));
                 }
                 
@@ -680,6 +636,7 @@
 
                 const orderTypeLabel = orderIsSecondary ? 'Order รอง' : 'Order หลัก';
                 showMessage(`ส่งหนู 1 ตัวเข้า ${orderTypeLabel} '${targetOrder.name}' เรียบร้อยแล้ว`, "success");
+
             } catch (e) {
                 console.error("Error sending rat to order:", e);
                 showMessage("เกิดข้อผิดพลาดในการส่ง Order", "error");
@@ -1529,6 +1486,58 @@
         }
 
         // ############################## NEW LOGIC STARTS HERE ##############################
+        
+        function findOrderLogic(size, weight, type) {
+            const selectedRatSizeData = ratSizeOptions.find(s => s.size === size);
+            if (!selectedRatSizeData) return null;
+            const ratOrderIndex = selectedRatSizeData.order;
+            const isLiveRat = type === 'หนูเป็น';
+
+            // Find Primary Order
+            let primaryOrderCandidates = allOrders.filter(o => 
+                o.department === 'fattening' && o.priority === 'หลัก' && o.items.some(item => 
+                    item.size === size && item.type === type && item.status === 'pending'
+                )
+            );
+
+            if (primaryOrderCandidates.length > 0) {
+                 primaryOrderCandidates.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                 const order = primaryOrderCandidates[0];
+                 const itemIndex = order.items.findIndex(item => item.size === size && item.type === type && item.status === 'pending');
+                 return { order, itemIndex, isSecondary: false };
+            }
+
+            // Find Secondary Order
+            const secondaryOrderCandidates = allOrders.filter(o => o.priority === 'รอง' && o.department === 'fattening');
+            const sortedSecondaryOrders = secondaryOrderCandidates.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+            
+            for (const order of sortedSecondaryOrders) {
+                if (isLiveRat) {
+                     const largerSizeOptions = ratSizeOptions.filter(s => s.order > ratOrderIndex);
+                     for (const largerSizeData of largerSizeOptions) {
+                         const itemIndex = (order.items || []).findIndex(item => 
+                             item.size === largerSizeData.size && item.type === type && item.status === 'pending' && weight >= item.minWeight && weight <= item.maxWeight
+                         );
+                         if (itemIndex !== -1) {
+                             return { order, itemIndex, isSecondary: true };
+                         }
+                     }
+                } else { // Frozen rat logic
+                     const smallerSizeOptions = ratSizeOptions.filter(s => s.order < ratOrderIndex);
+                     for (let i = smallerSizeOptions.length - 1; i >= 0; i--) {
+                         const smallerSizeData = smallerSizeOptions[i];
+                         const itemIndex = (order.items || []).findIndex(item => 
+                             item.size === smallerSizeData.size && item.type === type && item.status === 'pending' && weight >= item.minWeight && weight <= item.maxWeight
+                         );
+                         if (itemIndex !== -1) {
+                             return { order, itemIndex, isSecondary: true };
+                         }
+                     }
+                }
+            }
+            return null;
+        }
+
         function getRatTypeFromWeight(size, weight) {
             const w = parseFloat(weight);
             switch (size) {
@@ -1554,40 +1563,21 @@
         function findMatchingOrder() {
             if (!currentSize || !currentWeight) return false;
             
-            const currentRatWeight = parseFloat(currentWeight);
-            const ratType = getRatTypeFromWeight(currentSize, currentRatWeight);
-            const isLiveRat = (ratType === 'หนูเป็น');
-
-            const selectedSizeData = ratSizeOptions.find(s => s.size === currentSize);
-            if (!selectedSizeData) return false;
-            const currentRatOrder = selectedSizeData.order;
+            const initialRatType = getRatTypeFromWeight(currentSize, parseFloat(currentWeight));
             
-            const relevantOrders = allOrders.filter(o => o.department === 'fattening');
-            
-            const primaryOrderFound = relevantOrders.some(o => 
-                o.priority === 'หลัก' && o.items.some(item => 
-                    item.size === currentSize && item.type === ratType && item.status === 'pending'
-                )
-            );
-            if (primaryOrderFound) return true;
+            // Pass 1: Check for original type
+            if (findOrderLogic(currentSize, parseFloat(currentWeight), initialRatType)) {
+                return true;
+            }
 
-            const secondaryOrderFound = relevantOrders.some(o => o.priority === 'รอง' && o.items.some(item => {
-                 const targetItemSizeData = ratSizeOptions.find(s => s.size === item.size);
-                 if (!targetItemSizeData) return false;
+            // Pass 2: If live rat, check for frozen order as a fallback
+            if (initialRatType === 'หนูเป็น') {
+                if (findOrderLogic(currentSize, parseFloat(currentWeight), 'หนูแช่')) {
+                    return true;
+                }
+            }
 
-                 if (isLiveRat) {
-                     if (targetItemSizeData.order > currentRatOrder) {
-                         return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
-                     }
-                 } else {
-                     if (targetItemSizeData.order < currentRatOrder) {
-                         return item.type === ratType && item.status === 'pending' && currentRatWeight >= item.minWeight && currentRatWeight <= item.maxWeight;
-                     }
-                 }
-                return false;
-            }));
-            
-            return secondaryOrderFound;
+            return false;
         }
         // ############################## NEW LOGIC ENDS HERE ##############################
         
