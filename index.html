@@ -594,8 +594,14 @@
                 return;
             }
             
+            const targetItem = targetOrder.items[targetItemIndex];
+            if ((targetItem.sent || 0) >= targetItem.quantity) {
+                showMessage("Order รายการนี้ส่งครบแล้ว", "warning");
+                button.disabled = false;
+                return;
+            }
+            
             if (godMode) {
-                const targetItem = targetOrder.items[targetItemIndex];
                 if (parseFloat(currentWeight) < targetItem.minWeight || parseFloat(currentWeight) > targetItem.maxWeight) {
                     showMessage(`น้ำหนักหนู (${currentWeight}g) ไม่ตรงกับช่วงน้ำหนักของ Order (${targetItem.minWeight}-${targetItem.maxWeight}g)`, "warning");
                     button.disabled = false;
@@ -620,7 +626,6 @@
                         return { ...rat, estimatedWeight };
                     });
                     
-                    const targetItem = targetOrder.items[targetItemIndex];
                     const validCandidates = candidates.filter(c => c.estimatedWeight >= targetItem.minWeight && c.estimatedWeight <= targetItem.maxWeight);
                     if (validCandidates.length === 0) {
                          showMessage("ไม่พบหนูที่น้ำหนักอยู่ในช่วง Order นี้", "warning");
@@ -646,22 +651,27 @@
             }
         }
         
-        async function sendQuickRatToOrder(orderId, itemIndex) {
+        async function sendQuickRatToOrder(button, orderId, itemIndex) {
             const order = allOrders.find(o => o.id === orderId);
             if (!order) return;
-            const updatedItems = [...order.items];
-            const item = updatedItems[itemIndex];
-            if (item.status !== 'pending') {
-                 showMessage("Order รายการนี้ถูกปิดไปแล้ว", "warning");
+            const item = order.items[itemIndex];
+            if (item.status !== 'pending' || (item.sent || 0) >= item.quantity) {
+                 showMessage("Order รายการนี้ส่งครบแล้ว หรือถูกปิดไปแล้ว", "warning");
                  return;
             }
-            item.sent = (item.sent || 0) + 1;
+            
+            button.disabled = true;
+            const updatedItems = [...order.items];
+            updatedItems[itemIndex].sent = (updatedItems[itemIndex].sent || 0) + 1;
+            
             try {
                 await updateDoc(doc(db, `artifacts/${appId}/public/data/orders`, orderId), { items: updatedItems });
                 showMessage("ส่งหนูด่วนสำเร็จ!", "success");
             } catch (e) { 
                 console.error("Error sending quick rat:", e);
                 showMessage("เกิดข้อผิดพลาดในการส่งหนูด่วน", "error");
+            } finally {
+                button.disabled = false;
             }
         }
 
@@ -725,7 +735,7 @@
                     }
                 } 
                 else if (id === 'save-rat-btn') saveRat(button);
-                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button.dataset.orderId, button.dataset.itemIndex);
+                else if (classList.contains('send-rat-quick-btn')) sendQuickRatToOrder(button, button.dataset.orderId, button.dataset.itemIndex);
                 else if (id === 'return-rat-btn') returnRatToCrate(button);
                 else if (id === 'open-delete-rat-modal-btn') {
                     if (!currentRack || !currentShelf || !currentSide) {
@@ -1023,7 +1033,7 @@
                         }
                         const itemWeightRange = (item.minWeight && item.maxWeight) ? ` (${item.minWeight}-${item.maxWeight}g)` : '';
                         const itemTypeLabel = item.type ? ` (${item.type})` : '';
-                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div></div>${statusHtml}</div>`;
+                        return `<div class="border-t pt-2 mt-2"><div class="flex justify-between"><span>ไซส์ ${item.size}${itemWeightRange}${itemTypeLabel}</span><span class="${isComplete ? 'text-green-600' : 'text-gray-600'}">${sent}/${quantity}</span></div><div class="w-full bg-gray-200 rounded-full h-2.5 mt-1 overflow-hidden"><div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div></div>${statusHtml}</div>`;
                     }).join('');
                     return `<div class="bg-white p-4 rounded-lg shadow"><div class="flex justify-between items-start"><h3 class="font-bold text-lg">${order.name} <span class="text-sm font-normal text-gray-500">(${order.priority})</span></h3><div class="flex gap-2"><button class="edit-order-btn text-blue-500 hover:text-blue-700" data-order-id="${order.id}">แก้ไข</button><button class="delete-order-btn text-red-500 hover:text-red-700" data-order-id="${order.id}">ลบ</button></div></div><div class="mt-2">${itemsHtml}</div></div>`;
                 }).join('');
@@ -1073,11 +1083,14 @@
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-lg">${sent} / ${quantity}</p>
-                            <div class="w-24 bg-gray-200 rounded-full h-2.5 mt-1">
+                            <div class="w-24 bg-gray-200 rounded-full h-2.5 mt-1 overflow-hidden">
                                 <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div>
                             </div>
                         </div>
-                        <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" data-order-id="${item.orderId}" data-item-index="${item.itemIndex}">+1</button>
+                        <button class="send-rat-quick-btn bg-green-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-green-600 transition" 
+                                data-order-id="${item.orderId}" 
+                                data-item-index="${item.itemIndex}"
+                                ${isComplete ? 'disabled' : ''}>+1</button>
                     </div>
                 </div>`;
             }).join('');
@@ -1206,7 +1219,7 @@
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-lg">${sent} / ${quantity}</p>
-                            <div class="w-24 bg-gray-200 rounded-full h-2 mt-1">
+                            <div class="w-24 bg-gray-200 rounded-full h-2 mt-1 overflow-hidden">
                                 <div class="${isComplete ? 'bg-green-500' : 'bg-blue-500'} h-full rounded-full transition-all duration-500" style="width:${progress}%"></div>
                             </div>
                         </div>
@@ -1584,6 +1597,4 @@
     </script>
 </body>
 </html>
-
-
 
